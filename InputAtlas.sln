@@ -1,0 +1,60 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 18
+VisualStudioVersion = 18.0.0.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InputAtlas.Core", "src\InputAtlas.Core\InputAtlas.Core.csproj", "{A68139F5-4EE6-414E-9BD1-461045374785}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InputAtlas.Storage", "src\InputAtlas.Storage\InputAtlas.Storage.csproj", "{D13152D9-22E7-43AF-8A30-E8311B9737C6}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InputAtlas.Windows", "src\InputAtlas.Windows\InputAtlas.Windows.csproj", "{F67B6415-78C1-4D91-AC71-C559225B0378}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InputAtlas.App", "src\InputAtlas.App\InputAtlas.App.csproj", "{B80A5349-C81F-4E13-BD9C-C8D8C75E5E6D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InputAtlas.Core.Tests", "tests\InputAtlas.Core.Tests\InputAtlas.Core.Tests.csproj", "{598D308F-F2D8-457E-A3B0-406272D05C2C}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InputAtlas.Storage.Tests", "tests\InputAtlas.Storage.Tests\InputAtlas.Storage.Tests.csproj", "{605A23E8-A845-491B-BC59-75A919B7D7D4}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InputAtlas.App.Tests", "tests\InputAtlas.App.Tests\InputAtlas.App.Tests.csproj", "{CD7C0B89-FA88-46A3-8FB6-8CFCA8B63292}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InputAtlas.Windows.Tests", "tests\InputAtlas.Windows.Tests\InputAtlas.Windows.Tests.csproj", "{D4466F60-C43F-40CB-8EA9-E0FBD88EAC3F}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+		Release|x64 = Release|x64
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{A68139F5-4EE6-414E-9BD1-461045374785}.Debug|x64.ActiveCfg = Debug|x64
+		{A68139F5-4EE6-414E-9BD1-461045374785}.Debug|x64.Build.0 = Debug|x64
+		{A68139F5-4EE6-414E-9BD1-461045374785}.Release|x64.ActiveCfg = Release|x64
+		{A68139F5-4EE6-414E-9BD1-461045374785}.Release|x64.Build.0 = Release|x64
+		{D13152D9-22E7-43AF-8A30-E8311B9737C6}.Debug|x64.ActiveCfg = Debug|x64
+		{D13152D9-22E7-43AF-8A30-E8311B9737C6}.Debug|x64.Build.0 = Debug|x64
+		{D13152D9-22E7-43AF-8A30-E8311B9737C6}.Release|x64.ActiveCfg = Release|x64
+		{D13152D9-22E7-43AF-8A30-E8311B9737C6}.Release|x64.Build.0 = Release|x64
+		{F67B6415-78C1-4D91-AC71-C559225B0378}.Debug|x64.ActiveCfg = Debug|x64
+		{F67B6415-78C1-4D91-AC71-C559225B0378}.Debug|x64.Build.0 = Debug|x64
+		{F67B6415-78C1-4D91-AC71-C559225B0378}.Release|x64.ActiveCfg = Release|x64
+		{F67B6415-78C1-4D91-AC71-C559225B0378}.Release|x64.Build.0 = Release|x64
+		{B80A5349-C81F-4E13-BD9C-C8D8C75E5E6D}.Debug|x64.ActiveCfg = Debug|x64
+		{B80A5349-C81F-4E13-BD9C-C8D8C75E5E6D}.Debug|x64.Build.0 = Debug|x64
+		{B80A5349-C81F-4E13-BD9C-C8D8C75E5E6D}.Release|x64.ActiveCfg = Release|x64
+		{B80A5349-C81F-4E13-BD9C-C8D8C75E5E6D}.Release|x64.Build.0 = Release|x64
+		{598D308F-F2D8-457E-A3B0-406272D05C2C}.Debug|x64.ActiveCfg = Debug|x64
+		{598D308F-F2D8-457E-A3B0-406272D05C2C}.Debug|x64.Build.0 = Debug|x64
+		{598D308F-F2D8-457E-A3B0-406272D05C2C}.Release|x64.ActiveCfg = Release|x64
+		{598D308F-F2D8-457E-A3B0-406272D05C2C}.Release|x64.Build.0 = Release|x64
+		{605A23E8-A845-491B-BC59-75A919B7D7D4}.Debug|x64.ActiveCfg = Debug|x64
+		{605A23E8-A845-491B-BC59-75A919B7D7D4}.Debug|x64.Build.0 = Debug|x64
+		{605A23E8-A845-491B-BC59-75A919B7D7D4}.Release|x64.ActiveCfg = Release|x64
+		{605A23E8-A845-491B-BC59-75A919B7D7D4}.Release|x64.Build.0 = Release|x64
+		{CD7C0B89-FA88-46A3-8FB6-8CFCA8B63292}.Debug|x64.ActiveCfg = Debug|x64
+		{CD7C0B89-FA88-46A3-8FB6-8CFCA8B63292}.Debug|x64.Build.0 = Debug|x64
+		{CD7C0B89-FA88-46A3-8FB6-8CFCA8B63292}.Release|x64.ActiveCfg = Release|x64
+		{CD7C0B89-FA88-46A3-8FB6-8CFCA8B63292}.Release|x64.Build.0 = Release|x64
+		{D4466F60-C43F-40CB-8EA9-E0FBD88EAC3F}.Debug|x64.ActiveCfg = Debug|x64
+		{D4466F60-C43F-40CB-8EA9-E0FBD88EAC3F}.Debug|x64.Build.0 = Debug|x64
+		{D4466F60-C43F-40CB-8EA9-E0FBD88EAC3F}.Release|x64.ActiveCfg = Release|x64
+		{D4466F60-C43F-40CB-8EA9-E0FBD88EAC3F}.Release|x64.Build.0 = Release|x64
+	EndGlobalSection
+EndGlobal

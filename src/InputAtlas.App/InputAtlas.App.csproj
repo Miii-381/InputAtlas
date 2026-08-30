@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <RootNamespace>InputAtlas.App</RootNamespace>
+    <AssemblyName>InputAtlas</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <PublishSingleFile>false</PublishSingleFile>
+    <SelfContained>false</SelfContained>
+    <PublishReadyToRun>false</PublishReadyToRun>
+    <DebugType>embedded</DebugType>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\InputAtlas.Core\InputAtlas.Core.csproj" />
+    <ProjectReference Include="..\InputAtlas.Storage\InputAtlas.Storage.csproj" />
+    <ProjectReference Include="..\InputAtlas.Windows\InputAtlas.Windows.csproj" />
+    <PackageReference Include="OxyPlot.Wpf" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Layouts\*.json" />
+    <Content Include="..\..\LICENSES\THIRD-PARTY-NOTICES.md" Link="Licenses\THIRD-PARTY-NOTICES.md">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+</Project>

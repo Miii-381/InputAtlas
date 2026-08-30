@@ -116,6 +116,9 @@ function Invoke-Ci {
 function Invoke-Package {
     Invoke-Ci
     $innoCompiler = Resolve-InnoCompiler
+    if (Test-Path -LiteralPath $script:PackageRoot) {
+        Remove-Item -LiteralPath $script:PackageRoot -Recurse -Force
+    }
     New-Item -ItemType Directory -Path $script:PackageRoot -Force | Out-Null
     & $innoCompiler "/DMyAppVersion=$Version" "/DSourceDir=$script:PublishRoot" "/DOutputDir=$script:PackageRoot" (Join-Path $script:RepoRoot 'installer\InputAtlas.iss')
     if ($LASTEXITCODE -ne 0) {
@@ -172,6 +175,9 @@ function Invoke-Release {
     Invoke-Ci
     Invoke-Benchmarks
     $innoCompiler = Resolve-InnoCompiler
+    if (Test-Path -LiteralPath $script:PackageRoot) {
+        Remove-Item -LiteralPath $script:PackageRoot -Recurse -Force
+    }
     New-Item -ItemType Directory -Path $script:PackageRoot -Force | Out-Null
     & $innoCompiler "/DMyAppVersion=$Version" "/DSourceDir=$script:PublishRoot" "/DOutputDir=$script:PackageRoot" (Join-Path $script:RepoRoot 'installer\InputAtlas.iss')
     if ($LASTEXITCODE -ne 0) {

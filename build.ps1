@@ -169,7 +169,14 @@ function Invoke-Release {
         throw 'release 要求存在 Git 提交。'
     }
 
-    Invoke-Package
+    Invoke-Ci
+    Invoke-Benchmarks
+    $innoCompiler = Resolve-InnoCompiler
+    New-Item -ItemType Directory -Path $script:PackageRoot -Force | Out-Null
+    & $innoCompiler "/DMyAppVersion=$Version" "/DSourceDir=$script:PublishRoot" "/DOutputDir=$script:PackageRoot" (Join-Path $script:RepoRoot 'installer\InputAtlas.iss')
+    if ($LASTEXITCODE -ne 0) {
+        throw "Inno Setup 编译失败，退出码 $LASTEXITCODE。"
+    }
     Write-ReleaseMetadata
     Write-Host "发布制品已生成：$script:PackageRoot"
 }

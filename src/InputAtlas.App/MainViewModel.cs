@@ -59,8 +59,11 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
     private IReadOnlyDictionary<InputId, long> _inputCounts = new ReadOnlyDictionary<InputId, long>(new Dictionary<InputId, long>());
     private KeyboardLayoutDefinition _keyboardLayout;
     private InputId? _selectedInput;
-    private PlotModel _trendPlot = ChartAdapter.CreateCountsChart([], "最近 7 天键盘趋势");
-    private PlotModel _activityPlot = ChartAdapter.CreateActivityChart([]);
+    private PlotModel _trendPlot = ChartAdapter.CreateCountsChart(
+        [],
+        "最近 7 天键盘趋势",
+        GetEffectiveTimeZone().Zone);
+    private PlotModel _activityPlot = ChartAdapter.CreateActivityChart([], GetEffectiveTimeZone().Zone);
     private PlotModel _keyDistributionPlot = ChartAdapter.CreateKeyDistributionChart([]);
     private PlotModel _categoryDistributionPlot = ChartAdapter.CreateCategoryDistributionChart([]);
     private IReadOnlyList<InputRankingItem> _inputLeaderboard = [];
@@ -976,8 +979,15 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
         var mouse = await mouseTask.ConfigureAwait(true);
         var wheel = await wheelTask.ConfigureAwait(true);
         var activity = BuildActivityPoints(keyboard, mouse, wheel);
-        ChartAdapter.UpdateCountsChart(TrendPlot, keyboard);
-        ChartAdapter.UpdateActivityChart(ActivityPlot, activity);
+        var (displayTimeZone, fallback) = GetEffectiveTimeZone();
+        ChartAdapter.UpdateCountsChart(TrendPlot, keyboard, displayTimeZone);
+        ChartAdapter.UpdateActivityChart(ActivityPlot, activity, displayTimeZone);
+        var displayOffset = displayTimeZone.GetUtcOffset(now.UtcDateTime);
+        _log.Debug(
+            "analysis_charts_updated",
+            $"start_utc={start} end_utc={end} granularity={granularity} " +
+            $"keyboard_points={keyboard.Count} activity_points={activity.Length} " +
+            $"timezone_id={displayTimeZone.Id} offset_minutes={displayOffset.TotalMinutes:F0} fallback={fallback}");
     }
 
     private static StatisticsPoint[] BuildActivityPoints(

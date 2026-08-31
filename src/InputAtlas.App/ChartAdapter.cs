@@ -8,24 +8,31 @@ namespace InputAtlas.App;
 
 public static class ChartAdapter
 {
-    public static PlotModel CreateCountsChart(IReadOnlyList<StatisticsPoint> points, string title)
+    public static PlotModel CreateCountsChart(
+        IReadOnlyList<StatisticsPoint> points,
+        string title,
+        TimeZoneInfo displayTimeZone)
     {
+        ArgumentNullException.ThrowIfNull(displayTimeZone);
         var model = CreateModel(title);
         // 仪表盘卡片已经提供标题，图表画布保留给坐标与数据；参数仍用于兼容现有调用方。
         model.Title = string.Empty;
         var series = CreateLineSeries();
         model.Series.Add(series);
-        ReplacePoints(series, points);
+        ReplacePoints(series, points, displayTimeZone);
         return model;
     }
 
-    public static PlotModel CreateActivityChart(IReadOnlyList<StatisticsPoint> points)
+    public static PlotModel CreateActivityChart(
+        IReadOnlyList<StatisticsPoint> points,
+        TimeZoneInfo displayTimeZone)
     {
+        ArgumentNullException.ThrowIfNull(displayTimeZone);
         var model = CreateModel("活跃分数");
         model.Title = string.Empty;
         var series = CreateLineSeries();
         model.Series.Add(series);
-        ReplacePoints(series, points, 0.1);
+        ReplacePoints(series, points, displayTimeZone, 0.1);
         model.Annotations.Add(new OxyPlot.Annotations.LineAnnotation
         {
             Type = OxyPlot.Annotations.LineAnnotationType.Horizontal,
@@ -51,9 +58,13 @@ public static class ChartAdapter
         return model;
     }
 
-    public static void UpdateCountsChart(PlotModel model, IReadOnlyList<StatisticsPoint> points)
+    public static void UpdateCountsChart(
+        PlotModel model,
+        IReadOnlyList<StatisticsPoint> points,
+        TimeZoneInfo displayTimeZone)
     {
         ArgumentNullException.ThrowIfNull(model);
+        ArgumentNullException.ThrowIfNull(displayTimeZone);
         var series = model.Series.OfType<LineSeries>().FirstOrDefault();
         if (series is null)
         {
@@ -61,13 +72,17 @@ public static class ChartAdapter
             model.Series.Add(series);
         }
 
-        ReplacePoints(series, points);
+        ReplacePoints(series, points, displayTimeZone);
         model.InvalidatePlot(updateData: true);
     }
 
-    public static void UpdateActivityChart(PlotModel model, IReadOnlyList<StatisticsPoint> points)
+    public static void UpdateActivityChart(
+        PlotModel model,
+        IReadOnlyList<StatisticsPoint> points,
+        TimeZoneInfo displayTimeZone)
     {
         ArgumentNullException.ThrowIfNull(model);
+        ArgumentNullException.ThrowIfNull(displayTimeZone);
         var series = model.Series.OfType<LineSeries>().FirstOrDefault();
         if (series is null)
         {
@@ -75,7 +90,7 @@ public static class ChartAdapter
             model.Series.Add(series);
         }
 
-        ReplacePoints(series, points, 0.1);
+        ReplacePoints(series, points, displayTimeZone, 0.1);
         model.InvalidatePlot(updateData: true);
     }
 
@@ -197,6 +212,7 @@ public static class ChartAdapter
     private static void ReplacePoints(
         LineSeries series,
         IReadOnlyList<StatisticsPoint> points,
+        TimeZoneInfo displayTimeZone,
         double valueScale = 1)
     {
         series.Points.Clear();
@@ -204,8 +220,11 @@ public static class ChartAdapter
         {
             if (point.Coverage != CoverageState.Missing)
             {
+                var displayTime = TimeZoneInfo.ConvertTime(
+                    DateTimeOffset.FromUnixTimeSeconds(point.StartUtc),
+                    displayTimeZone);
                 series.Points.Add(new DataPoint(
-                    DateTimeAxis.ToDouble(DateTimeOffset.FromUnixTimeSeconds(point.StartUtc).UtcDateTime),
+                    DateTimeAxis.ToDouble(displayTime.DateTime),
                     point.Count * valueScale));
             }
         }

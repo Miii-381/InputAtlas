@@ -7,6 +7,12 @@ namespace InputAtlas.App.Tests;
 
 public sealed class ChartAdapterTests
 {
+    private static readonly TimeZoneInfo UtcPlusEight = TimeZoneInfo.CreateCustomTimeZone(
+        "Test UTC+08",
+        TimeSpan.FromHours(8),
+        "Test UTC+08",
+        "Test UTC+08");
+
     [Fact]
     public void UpdatingCountsPreservesTheUsersAxisZoom()
     {
@@ -15,18 +21,48 @@ public sealed class ChartAdapterTests
             new StatisticsPoint(100, 200, 10, 100, CoverageState.Complete),
             new StatisticsPoint(200, 300, 20, 100, CoverageState.Complete),
         };
-        var model = ChartAdapter.CreateCountsChart(initial, "测试趋势");
+        var model = ChartAdapter.CreateCountsChart(initial, "测试趋势", UtcPlusEight);
         var horizontalAxis = Assert.IsType<DateTimeAxis>(model.Axes[0]);
         horizontalAxis.Zoom(15, 25);
 
         ChartAdapter.UpdateCountsChart(
             model,
-            [new StatisticsPoint(300, 400, 30, 100, CoverageState.Complete)]);
+            [new StatisticsPoint(300, 400, 30, 100, CoverageState.Complete)],
+            UtcPlusEight);
 
         Assert.Equal(15, horizontalAxis.ActualMinimum);
         Assert.Equal(25, horizontalAxis.ActualMaximum);
         var series = Assert.IsType<LineSeries>(Assert.Single(model.Series));
         Assert.Single(series.Points);
+    }
+
+    [Fact]
+    public void CountsChartConvertsUtcTimestampsToTheConfiguredDisplayTimeZone()
+    {
+        var model = ChartAdapter.CreateCountsChart(
+            [new StatisticsPoint(0, 300, 10, 300, CoverageState.Complete)],
+            "测试趋势",
+            UtcPlusEight);
+
+        var horizontalAxis = Assert.IsType<DateTimeAxis>(model.Axes[0]);
+        var series = Assert.IsType<LineSeries>(Assert.Single(model.Series));
+        var displayed = horizontalAxis.ConvertToDateTime(Assert.Single(series.Points).X);
+
+        Assert.Equal(new DateTime(1970, 1, 1, 8, 0, 0), displayed);
+    }
+
+    [Fact]
+    public void ActivityChartConvertsUtcTimestampsToTheConfiguredDisplayTimeZone()
+    {
+        var model = ChartAdapter.CreateActivityChart(
+            [new StatisticsPoint(0, 300, 10, 300, CoverageState.Complete)],
+            UtcPlusEight);
+
+        var horizontalAxis = Assert.IsType<DateTimeAxis>(model.Axes[0]);
+        var series = Assert.IsType<LineSeries>(Assert.Single(model.Series));
+        var displayed = horizontalAxis.ConvertToDateTime(Assert.Single(series.Points).X);
+
+        Assert.Equal(new DateTime(1970, 1, 1, 8, 0, 0), displayed);
     }
 
     [Fact]

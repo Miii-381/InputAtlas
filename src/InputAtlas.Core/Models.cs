@@ -39,6 +39,17 @@ public enum StatisticsGranularity
     OneMonth,
 }
 
+/// <summary>
+/// 热力图阈值的计算方式。固定次数适合长期对比，另外两种方式会随当前数据分布自动调整。
+/// </summary>
+public enum HeatmapThresholdMode
+{
+    FixedCount,
+    RelativeToMaximum,
+    Percentile,
+    SquareRootScale,
+}
+
 public sealed record BucketSnapshot(
     long BucketStartUtc,
     int CoverageSeconds,
@@ -92,8 +103,7 @@ public sealed record InputMetrics(
     long WheelSteps,
     long ActivityUnits)
 {
-    public decimal ActivityScore => ActivityUnits / 5m;
+    public decimal ActivityScore => ActivityUnits / 10m;
 
-    public bool IsActiveDay => ActivityUnits > 5000;
+    public bool IsActiveDay => ActivityUnits > 10000;
 }
-

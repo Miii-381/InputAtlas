@@ -3,146 +3,960 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:InputAtlas.App"
         xmlns:oxy="http://oxyplot.org/wpf"
-        Title="InputAtlas 输入图谱" Width="1280" Height="800" MinWidth="1024" MinHeight="640"
-        WindowStartupLocation="CenterScreen" Closing="WindowClosing">
-    <Grid>
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="190" />
-            <ColumnDefinition Width="*" />
-        </Grid.ColumnDefinitions>
+        Title="InputAtlas 输入图谱"
+        Icon="Assets/inputatlas-esc-icon.ico"
+        Width="1360"
+        Height="860"
+        MinWidth="960"
+        MinHeight="620"
+        WindowStartupLocation="CenterScreen"
+        Closing="WindowClosing"
+        PreviewMouseLeftButtonDown="WindowPreviewMouseLeftButtonDown"
+        PreviewMouseMove="WindowPreviewMouseMove"
+        Deactivated="WindowDeactivated">
+    <Grid x:Name="RootLayout" Background="{StaticResource WindowBrush}">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="92" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
 
-        <Border Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,1,0">
-            <Grid Margin="18">
-                <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
-                <StackPanel>
-                    <TextBlock Text="InputAtlas" FontSize="24" FontWeight="SemiBold" />
-                    <TextBlock Text="输入图谱" Foreground="{StaticResource MutedTextBrush}" />
-                </StackPanel>
-                <StackPanel Grid.Row="1" Margin="0,35,0,0">
-                    <Button Content="首页" Command="{Binding NavigateCommand}" CommandParameter="0" HorizontalContentAlignment="Left" />
-                    <Button Content="趋势" Command="{Binding NavigateCommand}" CommandParameter="1" HorizontalContentAlignment="Left" />
-                    <Button Content="历史" Command="{Binding NavigateCommand}" CommandParameter="2" HorizontalContentAlignment="Left" />
-                    <Button Content="设置" Command="{Binding NavigateCommand}" CommandParameter="3" HorizontalContentAlignment="Left" />
-                </StackPanel>
-                <StackPanel Grid.Row="2">
-                    <TextBlock Text="{Binding StatusText}" Foreground="{StaticResource AccentBrush}" FontWeight="SemiBold" />
-                    <TextBlock Text="{Binding LastSavedText}" Foreground="{StaticResource MutedTextBrush}" FontSize="11" Margin="0,5,0,0" TextWrapping="Wrap" />
-                </StackPanel>
-            </Grid>
-        </Border>
-
-        <Grid Grid.Column="1">
-            <Grid.RowDefinitions><RowDefinition Height="74" /><RowDefinition Height="*" /></Grid.RowDefinitions>
-            <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="26,0">
+            <!-- Material top app bar -->
+            <Border Padding="28,0,26,0" Background="{StaticResource WindowBrush}">
                 <Grid>
                     <StackPanel VerticalAlignment="Center">
-                        <TextBlock Text="{Binding CurrentDate}" FontSize="22" FontWeight="SemiBold" />
-                        <TextBlock Text="{Binding TimeZoneLabel}" Foreground="{StaticResource MutedTextBrush}" FontSize="12" />
+                        <TextBlock Text="{Binding PageTitle}" FontSize="28" FontWeight="SemiBold" />
+                        <TextBlock Text="{Binding PageSubtitle}"
+                                   Foreground="{StaticResource MutedTextBrush}"
+                                   FontSize="14"
+                                   Margin="0,4,0,0" />
+                        <TextBlock Text="{Binding ActivityScoreFormula}"
+                                   Foreground="{StaticResource MutedTextBrush}"
+                                   FontSize="13"
+                                   Margin="0,3,0,0" />
                     </StackPanel>
-                    <Button Content="刷新" Command="{Binding RefreshCommand}" HorizontalAlignment="Right" VerticalAlignment="Center" Width="80" />
+                    <StackPanel HorizontalAlignment="Right" VerticalAlignment="Center" Orientation="Horizontal">
+                        <Border Background="{StaticResource CardBrush}" CornerRadius="14" Padding="16,10">
+                            <StackPanel>
+                                <TextBlock Text="{Binding CurrentDate}"
+                                           FontSize="21"
+                                           FontWeight="SemiBold"
+                                           HorizontalAlignment="Right" />
+                                <TextBlock Text="{Binding CurrentTime}"
+                                           FontSize="15"
+                                           FontWeight="SemiBold"
+                                           HorizontalAlignment="Right"
+                                           Margin="0,1,0,0" />
+                                <TextBlock Text="{Binding TimeZoneLabel}"
+                                           Foreground="{StaticResource MutedTextBrush}"
+                                           FontSize="12"
+                                           Margin="0,1,0,0"
+                                           HorizontalAlignment="Right" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
                 </Grid>
             </Border>
 
-            <TabControl Grid.Row="1" SelectedIndex="{Binding PageIndex}" Background="Transparent" BorderThickness="0">
-                <TabControl.Resources>
-                    <Style TargetType="TabItem"><Setter Property="Visibility" Value="Collapsed" /></Style>
-                </TabControl.Resources>
-
+            <TabControl Grid.Row="1"
+                        Style="{StaticResource PageTabControl}"
+                        SelectedIndex="{Binding PageIndex}">
                 <TabItem>
-                    <ScrollViewer VerticalScrollBarVisibility="Auto">
-                        <StackPanel Margin="22">
-                            <UniformGrid Columns="6" Margin="-5,0,-5,16">
-                                <Border Style="{StaticResource MetricCard}"><StackPanel><TextBlock Text="今日键盘" Foreground="{StaticResource MutedTextBrush}" /><TextBlock Text="{Binding KeyboardCount}" FontSize="30" FontWeight="Bold" /></StackPanel></Border>
-                                <Border Style="{StaticResource MetricCard}"><StackPanel><TextBlock Text="今日鼠标" Foreground="{StaticResource MutedTextBrush}" /><TextBlock Text="{Binding MouseCount}" FontSize="30" FontWeight="Bold" /></StackPanel></Border>
-                                <Border Style="{StaticResource MetricCard}"><StackPanel><TextBlock Text="滚轮格数" Foreground="{StaticResource MutedTextBrush}" /><TextBlock Text="{Binding WheelCount}" FontSize="30" FontWeight="Bold" /></StackPanel></Border>
-                                <Border Style="{StaticResource MetricCard}"><StackPanel><TextBlock Text="活跃分数" Foreground="{StaticResource MutedTextBrush}" /><TextBlock Text="{Binding ActivityScore}" FontSize="30" FontWeight="Bold" /></StackPanel></Border>
-                                <Border Style="{StaticResource MetricCard}"><StackPanel><TextBlock Text="已使用" Foreground="{StaticResource MutedTextBrush}" /><TextBlock FontSize="30" FontWeight="Bold"><Run Text="{Binding UsedDays}" /><Run Text=" 天" FontSize="14" /></TextBlock></StackPanel></Border>
-                                <Border Style="{StaticResource MetricCard}"><StackPanel><TextBlock Text="已活跃" Foreground="{StaticResource MutedTextBrush}" /><TextBlock FontSize="30" FontWeight="Bold"><Run Text="{Binding ActiveDays}" /><Run Text=" 天" FontSize="14" /></TextBlock></StackPanel></Border>
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel Margin="22,4,22,26">
+                            <UniformGrid Columns="6" Margin="-6,0,-6,14">
+                                <Border Style="{StaticResource MetricCard}" Background="{Binding ActivityScoreBackground}">
+                                    <StackPanel>
+                                        <TextBlock Text="活跃分数" Foreground="{Binding ActivityScoreForeground}" FontSize="14" />
+                                        <Grid Height="35" Margin="0,7,0,0">
+                                            <TextBlock Text="{Binding ActivityScore}"
+                                                       Foreground="{Binding ActivityScoreForeground}"
+                                                       FontSize="{Binding ActivityScore, Converter={StaticResource MetricFontSizeConverter}}"
+                                                       FontWeight="SemiBold"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       VerticalAlignment="Center" />
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+                                <Border Style="{StaticResource MetricCard}">
+                                    <StackPanel>
+                                        <TextBlock Text="今日键盘" Foreground="{StaticResource MutedTextBrush}" FontSize="14" />
+                                        <Grid Height="35" Margin="0,7,0,0">
+                                            <TextBlock Text="{Binding KeyboardCount}"
+                                                       FontSize="{Binding KeyboardCount, Converter={StaticResource MetricFontSizeConverter}}"
+                                                       FontWeight="SemiBold"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       VerticalAlignment="Center" />
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+                                <Border Style="{StaticResource MetricCard}">
+                                    <StackPanel>
+                                        <TextBlock Text="今日鼠标" Foreground="{StaticResource MutedTextBrush}" FontSize="14" />
+                                        <Grid Height="35" Margin="0,7,0,0">
+                                            <TextBlock Text="{Binding MouseCount}"
+                                                       FontSize="{Binding MouseCount, Converter={StaticResource MetricFontSizeConverter}}"
+                                                       FontWeight="SemiBold"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       VerticalAlignment="Center" />
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+                                <Border Style="{StaticResource MetricCard}">
+                                    <StackPanel>
+                                        <TextBlock Text="滚轮格数" Foreground="{StaticResource MutedTextBrush}" FontSize="14" />
+                                        <Grid Height="35" Margin="0,7,0,0">
+                                            <TextBlock Text="{Binding WheelCount}"
+                                                       FontSize="{Binding WheelCount, Converter={StaticResource MetricFontSizeConverter}}"
+                                                       FontWeight="SemiBold"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       VerticalAlignment="Center" />
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+                                <Border Style="{StaticResource MetricCard}">
+                                    <StackPanel>
+                                        <TextBlock Text="已使用" Foreground="{StaticResource MutedTextBrush}" FontSize="14" />
+                                        <Grid Height="35" Margin="0,7,0,0">
+                                            <TextBlock FontSize="{Binding UsedDays, Converter={StaticResource MetricFontSizeConverter}}"
+                                                       FontWeight="SemiBold"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       VerticalAlignment="Center">
+                                                <Run Text="{Binding UsedDays, Mode=OneWay}" /><Run Text=" 天" FontSize="14" Foreground="{StaticResource MutedTextBrush}" />
+                                            </TextBlock>
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+                                <Border Style="{StaticResource MetricCard}">
+                                    <StackPanel>
+                                        <TextBlock Text="已活跃" Foreground="{StaticResource MutedTextBrush}" FontSize="14" />
+                                        <Grid Height="35" Margin="0,7,0,0">
+                                            <TextBlock FontSize="{Binding ActiveDays, Converter={StaticResource MetricFontSizeConverter}}"
+                                                       FontWeight="SemiBold"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       VerticalAlignment="Center">
+                                                <Run Text="{Binding ActiveDays, Mode=OneWay}" /><Run Text=" 天" FontSize="14" Foreground="{StaticResource MutedTextBrush}" />
+                                            </TextBlock>
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
                             </UniformGrid>
 
                             <Grid>
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="225" /></Grid.ColumnDefinitions>
-                                <Border Style="{StaticResource MetricCard}" Padding="14">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="360" MinWidth="340" />
+                                </Grid.ColumnDefinitions>
+
+                                <Border Style="{StaticResource SurfaceCard}" Padding="20,18">
                                     <Grid>
-                                        <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="360" /></Grid.RowDefinitions>
-                                        <TextBlock Text="键盘热力图" FontSize="17" FontWeight="SemiBold" Margin="4,0,0,8" />
-                                        <local:KeyboardHeatmapControl Grid.Row="1" Layout="{Binding KeyboardLayout}" Counts="{Binding InputCounts}" SelectedInput="{Binding SelectedInput}" InputSelected="KeyboardSelected" />
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="*" />
+                                            <RowDefinition Height="Auto" />
+                                        </Grid.RowDefinitions>
+                                        <Grid Margin="2,0,2,12">
+                                            <StackPanel>
+                                                <TextBlock Text="键盘热力图" FontSize="20" FontWeight="SemiBold" />
+                                                <TextBlock Text="实时输入会轻触点亮键帽，热度表示今日累计次数"
+                                                           Foreground="{StaticResource MutedTextBrush}"
+                                                           FontSize="13"
+                                                           Margin="0,4,0,0" />
+                                            </StackPanel>
+                                            <Border HorizontalAlignment="Right"
+                                                    VerticalAlignment="Center"
+                                                    Background="{DynamicResource AccentContainerBrush}"
+                                                    CornerRadius="10"
+                                                    Padding="10,5">
+                                                <TextBlock Text="实时" Foreground="{DynamicResource AccentTextBrush}" FontSize="13" FontWeight="SemiBold" />
+                                            </Border>
+                                        </Grid>
+                                        <local:KeyboardHeatmapControl x:Name="KeyboardMap"
+                                                                      Grid.Row="1"
+                                                                      Height="390"
+                                                                      Layout="{Binding KeyboardLayout}"
+                                                                      Counts="{Binding InputCounts}"
+                                                                      Thresholds="{Binding HeatmapThresholds}"
+                                                                      ThresholdMode="{Binding HeatmapThresholdMode}"
+                                                                      AccentColor="{DynamicResource AccentColor}"
+                                                                      FontFamily="{DynamicResource AppFontFamily}"
+                                                                      SelectedInput="{Binding SelectedInput}"
+                                                                      InputSelected="KeyboardSelected" />
+                                        <StackPanel Grid.Row="2"
+                                                    Orientation="Horizontal"
+                                                    Margin="2,12,0,0"
+                                                    VerticalAlignment="Center">
+                                            <TextBlock Text="低频"
+                                                       Foreground="{StaticResource MutedTextBrush}"
+                                                       FontSize="13"
+                                                       VerticalAlignment="Center"
+                                                       TextWrapping="NoWrap" />
+                                            <Border Width="22" Height="12" Margin="7,0,3,0" Background="#FFFCF6" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="3" />
+                                            <Border Width="22" Height="12" Margin="3,0" Background="#8FB8CF" CornerRadius="3" />
+                                            <Border Width="22" Height="12" Margin="3,0" Background="#D6B66C" CornerRadius="3" />
+                                            <Border Width="22" Height="12" Margin="3,0,7,0" Background="#CF7A86" CornerRadius="3" />
+                                            <TextBlock Text="高频"
+                                                       Foreground="{StaticResource MutedTextBrush}"
+                                                       FontSize="13"
+                                                       VerticalAlignment="Center"
+                                                       Margin="0,0,12,0"
+                                                       TextWrapping="NoWrap" />
+                                            <TextBlock Text="阈值算法"
+                                                       Foreground="{StaticResource MutedTextBrush}"
+                                                       FontSize="13"
+                                                       VerticalAlignment="Center"
+                                                       Margin="0,0,5,0"
+                                                       TextWrapping="NoWrap" />
+                                            <ComboBox ItemsSource="{Binding HeatmapThresholdModeOptions}"
+                                                      SelectedValuePath="Value"
+                                                      SelectedValue="{Binding HeatmapThresholdMode, Mode=OneWay}"
+                                                      SelectionChanged="HeatmapThresholdModeChanged"
+                                                      Width="128"
+                                                      Height="36"
+                                                      ToolTip="选择热力图阈值的计算方式">
+                                                <ComboBox.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <TextBlock Text="{Binding Label}" />
+                                                    </DataTemplate>
+                                                </ComboBox.ItemTemplate>
+                                            </ComboBox>
+                                        </StackPanel>
                                     </Grid>
                                 </Border>
+
                                 <StackPanel Grid.Column="1">
-                                    <Border Style="{StaticResource MetricCard}">
+                                    <Border Style="{StaticResource SurfaceCard}" MinWidth="340">
                                         <StackPanel>
-                                            <TextBlock Text="通用五键鼠标" FontSize="16" FontWeight="SemiBold" />
-                                            <local:MouseHeatmapControl Counts="{Binding InputCounts}" Height="230" />
+                                            <TextBlock Text="鼠标热力图" FontSize="19" FontWeight="SemiBold" />
+                                            <TextBlock Text="五键与滚轮统计"
+                                                       Foreground="{StaticResource MutedTextBrush}"
+                                                       FontSize="13"
+                                                       Margin="0,3,0,8" />
+                                             <local:MouseHeatmapControl x:Name="MouseMap"
+                                                                        Counts="{Binding InputCounts}"
+                                                                        Thresholds="{Binding HeatmapThresholds}"
+                                                                        ThresholdMode="{Binding HeatmapThresholdMode}"
+                                                                        AccentColor="{DynamicResource AccentColor}"
+                                                                        FontFamily="{DynamicResource AppFontFamily}"
+                                                                        MinWidth="310"
+                                                                        Height="270" />
+                                            <StackPanel Orientation="Horizontal"
+                                                        Margin="2,8,2,16"
+                                                        VerticalAlignment="Center">
+                                                <TextBlock Text="低频"
+                                                           Foreground="{StaticResource MutedTextBrush}"
+                                                           FontSize="13"
+                                                           VerticalAlignment="Center"
+                                                           TextWrapping="NoWrap" />
+                                                <Border Width="22" Height="12" Margin="7,0,3,0" Background="#FFFCF6" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="3" />
+                                                <Border Width="22" Height="12" Margin="3,0" Background="#8FB8CF" CornerRadius="3" />
+                                                <Border Width="22" Height="12" Margin="3,0" Background="#D6B66C" CornerRadius="3" />
+                                                <Border Width="22" Height="12" Margin="3,0,7,0" Background="#CF7A86" CornerRadius="3" />
+                                                <TextBlock Text="高频"
+                                                           Foreground="{StaticResource MutedTextBrush}"
+                                                           FontSize="13"
+                                                           VerticalAlignment="Center"
+                                                           TextWrapping="NoWrap" />
+                                            </StackPanel>
                                         </StackPanel>
                                     </Border>
-                                    <Border Style="{StaticResource MetricCard}">
+
+                                    <Border Style="{StaticResource SurfaceCard}" Padding="18">
                                         <StackPanel>
-                                            <TextBlock Text="{Binding SelectedInputTitle}" FontWeight="SemiBold" />
-                                            <TextBlock Text="{Binding SelectedInputDetail}" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" Margin="0,7,0,0" />
+                                            <TextBlock Text="当前选择"
+                                                       Foreground="{StaticResource MutedTextBrush}"
+                                                       FontSize="13" />
+                                            <TextBlock Text="{Binding SelectedInputTitle}"
+                                                       FontSize="17"
+                                                       FontWeight="SemiBold"
+                                                       Margin="0,7,0,0" />
+                                            <TextBlock Text="{Binding SelectedInputDetail}"
+                                                       Foreground="{StaticResource MutedTextBrush}"
+                                                       FontSize="14"
+                                                       TextWrapping="Wrap"
+                                                       Margin="0,7,0,0" />
                                         </StackPanel>
                                     </Border>
                                 </StackPanel>
                             </Grid>
-                            <TextBlock Text="活跃分数 = 键盘按键 + 鼠标按键 + 滚轮格数 × 0.2" Foreground="{StaticResource MutedTextBrush}" Margin="8,10" />
                         </StackPanel>
                     </ScrollViewer>
                 </TabItem>
 
                 <TabItem>
-                    <Grid Margin="26">
-                        <Grid.RowDefinitions><RowDefinition Height="*" /><RowDefinition Height="*" /></Grid.RowDefinitions>
-                        <Border Style="{StaticResource MetricCard}"><oxy:PlotView Model="{Binding TrendPlot}" /></Border>
-                        <Border Grid.Row="1" Style="{StaticResource MetricCard}"><oxy:PlotView Model="{Binding ActivityPlot}" /></Border>
-                    </Grid>
-                </TabItem>
+                    <!-- 统一分析仪表盘：日期筛选、范围摘要、趋势与统计维度在同一滚动页面内。 -->
+                    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled">
+                        <Grid Margin="22,0,22,100" HorizontalAlignment="Stretch">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
 
-                <TabItem>
-                    <StackPanel Margin="30">
-                        <TextBlock Text="历史统计" FontSize="28" FontWeight="SemiBold" />
-                        <TextBlock Text="按当前有效时区动态聚合；缺失覆盖不会被当成零。" Foreground="{StaticResource MutedTextBrush}" Margin="0,6,0,18" />
-                        <WrapPanel>
-                            <StackPanel Margin="0,0,14,0"><TextBlock Text="开始日期" /><DatePicker SelectedDate="{Binding HistoryStart}" Width="180" /></StackPanel>
-                            <StackPanel Margin="0,0,14,0"><TextBlock Text="结束日期" /><DatePicker SelectedDate="{Binding HistoryEnd}" Width="180" /></StackPanel>
-                            <Button Content="查询" Command="{Binding QueryHistoryCommand}" Width="90" VerticalAlignment="Bottom" />
-                        </WrapPanel>
-                        <Border Style="{StaticResource MetricCard}" Margin="0,24,0,0">
-                            <TextBlock Text="{Binding HistorySummary}" FontSize="20" TextWrapping="Wrap" />
-                        </Border>
-                    </StackPanel>
+                            <Border Grid.Row="0"
+                                    Style="{StaticResource SurfaceCard}"
+                                    Padding="24"
+                                    Margin="0,0,0,14">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="202" />
+                                        <ColumnDefinition Width="202" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.ColumnSpan="5">
+                                        <TextBlock Text="历史分析仪表盘" FontSize="22" FontWeight="SemiBold" />
+                                        <TextBlock Text="统一查看趋势、输入构成与按键排行；查询范围会同步到下方分析卡片。"
+                                                   Foreground="{StaticResource MutedTextBrush}"
+                                                   FontSize="13"
+                                                   Margin="0,4,0,18" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,12,0">
+                                        <TextBlock Text="开始日期"
+                                                   Foreground="{StaticResource MutedTextBrush}"
+                                                   FontSize="13"
+                                                   Margin="0,0,0,6" />
+                                        <DatePicker SelectedDate="{Binding HistoryStart}" Width="190" Height="44" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Row="1" Grid.Column="1" Margin="0,0,12,0">
+                                        <TextBlock Text="结束日期"
+                                                   Foreground="{StaticResource MutedTextBrush}"
+                                                   FontSize="13"
+                                                   Margin="0,0,0,6" />
+                                        <DatePicker SelectedDate="{Binding HistoryEnd}" Width="190" Height="44" />
+                                    </StackPanel>
+                                    <Button Grid.Row="1"
+                                            Grid.Column="2"
+                                            Content="查询统计"
+                                            Command="{Binding QueryHistoryCommand}"
+                                            Width="112"
+                                            Height="44"
+                                            VerticalAlignment="Bottom" />
+                                    <Button Grid.Row="1"
+                                            Grid.Column="3"
+                                            Content="删除此日期范围"
+                                            Style="{StaticResource DangerButton}"
+                                            Click="DeleteRangeClick"
+                                            Width="150"
+                                            Height="44"
+                                            Margin="8,4,16,4"
+                                            VerticalAlignment="Bottom"
+                                            ToolTip="仅删除上方开始日期至结束日期的统计，执行前会自动创建安全备份" />
+                                    <Border Grid.Row="1"
+                                            Grid.Column="4"
+                                            Background="{DynamicResource AccentContainerBrush}"
+                                            CornerRadius="12"
+                                            Padding="14,9"
+                                            VerticalAlignment="Bottom">
+                                        <StackPanel>
+                                            <TextBlock Text="当前分析范围"
+                                                       Foreground="{DynamicResource AccentTextBrush}"
+                                                       FontSize="12"
+                                                       FontWeight="SemiBold" />
+                                            <TextBlock Text="{Binding AnalysisScopeLabel}"
+                                                       Foreground="{DynamicResource AccentTextBrush}"
+                                                       FontSize="14"
+                                                       FontWeight="SemiBold"
+                                                       Margin="0,2,0,0" />
+                                            <TextBlock Text="{Binding HistorySummary}"
+                                                       Foreground="{DynamicResource AccentTextBrush}"
+                                                       FontSize="13"
+                                                       TextWrapping="Wrap"
+                                                       Margin="0,3,0,0" />
+                                        </StackPanel>
+                                    </Border>
+                                </Grid>
+                            </Border>
+
+                            <UniformGrid Grid.Row="1" Columns="4" Margin="-7,0,-7,14">
+                                <Border Style="{StaticResource MetricCard}" Background="{Binding ActivityScoreBackground}">
+                                    <StackPanel>
+                                        <TextBlock Text="活跃分数" Foreground="{Binding ActivityScoreForeground}" FontSize="14" />
+                                        <TextBlock Text="{Binding HistoryActivityScore}"
+                                                   Foreground="{Binding ActivityScoreForeground}"
+                                                   FontSize="29"
+                                                   FontWeight="SemiBold"
+                                                   Margin="0,6,0,0" />
+                                        <TextBlock Text="{Binding HistoryCoverage}"
+                                                   Foreground="{Binding ActivityScoreForeground}"
+                                                   FontSize="12"
+                                                   Margin="0,3,0,0" />
+                                    </StackPanel>
+                                </Border>
+                                <Border Style="{StaticResource MetricCard}">
+                                    <StackPanel>
+                                        <TextBlock Text="键盘输入" Foreground="{StaticResource MutedTextBrush}" FontSize="14" />
+                                        <TextBlock Text="{Binding HistoryKeyboardCount}"
+                                                   FontSize="29"
+                                                   FontWeight="SemiBold"
+                                                   Margin="0,6,0,0" />
+                                        <TextBlock Text="所选范围累计" Foreground="{StaticResource MutedTextBrush}" FontSize="12" Margin="0,3,0,0" />
+                                    </StackPanel>
+                                </Border>
+                                <Border Style="{StaticResource MetricCard}">
+                                    <StackPanel>
+                                        <TextBlock Text="鼠标点击" Foreground="{StaticResource MutedTextBrush}" FontSize="14" />
+                                        <TextBlock Text="{Binding HistoryMouseCount}"
+                                                   FontSize="29"
+                                                   FontWeight="SemiBold"
+                                                   Margin="0,6,0,0" />
+                                        <TextBlock Text="所选范围累计" Foreground="{StaticResource MutedTextBrush}" FontSize="12" Margin="0,3,0,0" />
+                                    </StackPanel>
+                                </Border>
+                                <Border Style="{StaticResource MetricCard}">
+                                    <StackPanel>
+                                        <TextBlock Text="滚轮步数" Foreground="{StaticResource MutedTextBrush}" FontSize="14" />
+                                        <TextBlock Text="{Binding HistoryWheelCount}"
+                                                   FontSize="29"
+                                                   FontWeight="SemiBold"
+                                                   Margin="0,6,0,0" />
+                                        <TextBlock Text="滚轮权重 0.1×" Foreground="{StaticResource MutedTextBrush}" FontSize="12" Margin="0,3,0,0" />
+                                    </StackPanel>
+                                </Border>
+                            </UniformGrid>
+
+                            <Grid Grid.Row="2" Margin="0,0,0,14">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Border Grid.Column="0"
+                                        Style="{StaticResource SurfaceCard}"
+                                        Padding="18"
+                                        Margin="0,0,7,0">
+                                    <Grid>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="250" />
+                                        </Grid.RowDefinitions>
+                                        <StackPanel>
+                                            <TextBlock Text="键盘输入趋势" FontSize="19" FontWeight="SemiBold" />
+                                            <TextBlock Text="按当前分析范围聚合，缺失覆盖不会被当成零。"
+                                                       Foreground="{StaticResource MutedTextBrush}"
+                                                       FontSize="13"
+                                                       Margin="0,3,0,0" />
+                                        </StackPanel>
+                                        <oxy:PlotView Grid.Row="1"
+                                                      HorizontalAlignment="Stretch"
+                                                      VerticalAlignment="Stretch"
+                                                      IsMouseWheelEnabled="False"
+                                                      Background="Transparent"
+                                                      Model="{Binding TrendPlot}" />
+                                    </Grid>
+                                </Border>
+                                <Border Grid.Column="1"
+                                        Style="{StaticResource SurfaceCard}"
+                                        Padding="18"
+                                        Margin="7,0,0,0">
+                                    <Grid>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="250" />
+                                        </Grid.RowDefinitions>
+                                        <StackPanel>
+                                            <TextBlock Text="活跃分数趋势" FontSize="19" FontWeight="SemiBold" />
+                                            <TextBlock Text="键盘与鼠标按键按 1×、滚轮按 0.1× 计入。"
+                                                       Foreground="{StaticResource MutedTextBrush}"
+                                                       FontSize="13"
+                                                       Margin="0,3,0,0" />
+                                        </StackPanel>
+                                        <oxy:PlotView Grid.Row="1"
+                                                      HorizontalAlignment="Stretch"
+                                                      VerticalAlignment="Stretch"
+                                                      IsMouseWheelEnabled="False"
+                                                      Background="Transparent"
+                                                      Model="{Binding ActivityPlot}" />
+                                    </Grid>
+                                </Border>
+                            </Grid>
+
+                            <Grid Grid.Row="3" Margin="0,0,0,14">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="1.05*" />
+                                    <ColumnDefinition Width="1.25*" />
+                                </Grid.ColumnDefinitions>
+                                <Border Grid.Column="0"
+                                        Style="{StaticResource SurfaceCard}"
+                                        Padding="22"
+                                        Margin="0,0,7,0">
+                                    <StackPanel>
+                                        <TextBlock Text="按键数排行榜" FontSize="20" FontWeight="SemiBold" />
+                                        <TextBlock Text="按当前分析范围累计次数排序，快速找到最常用的按键。"
+                                                   Foreground="{StaticResource MutedTextBrush}"
+                                                   FontSize="13"
+                                                   TextWrapping="Wrap"
+                                                   Margin="0,4,0,14" />
+                                        <ItemsControl ItemsSource="{Binding InputLeaderboard}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Grid Margin="0,4">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="32" />
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="78" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <Border Width="26"
+                                                                Height="26"
+                                                                CornerRadius="13"
+                                                                Background="{DynamicResource AccentContainerBrush}"
+                                                                VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding Rank}"
+                                                                       Foreground="{DynamicResource AccentTextBrush}"
+                                                                       FontWeight="SemiBold"
+                                                                       HorizontalAlignment="Center"
+                                                                       VerticalAlignment="Center" />
+                                                        </Border>
+                                                        <StackPanel Grid.Column="1" Margin="8,0,12,0" VerticalAlignment="Center">
+                                                            <DockPanel LastChildFill="False">
+                                                                <TextBlock Text="{Binding Label}" FontWeight="SemiBold" />
+                                                                <TextBlock Text="{Binding Category}"
+                                                                           Foreground="{StaticResource MutedTextBrush}"
+                                                                           FontSize="12"
+                                                                           Margin="8,2,0,0" />
+                                                            </DockPanel>
+                                                            <ProgressBar Minimum="0"
+                                                                         Maximum="1"
+                                                                         Value="{Binding Share}"
+                                                                         Height="6"
+                                                                         Margin="0,5,0,0"
+                                                                         Background="{StaticResource CardHighBrush}"
+                                                                         Foreground="{DynamicResource AccentBrush}"
+                                                                         BorderThickness="0" />
+                                                        </StackPanel>
+                                                        <StackPanel Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding Count, StringFormat={}{0:N0}}"
+                                                                       FontWeight="SemiBold"
+                                                                       HorizontalAlignment="Right" />
+                                                            <TextBlock Text="{Binding Share, StringFormat={}{0:P0}}"
+                                                                       Foreground="{StaticResource MutedTextBrush}"
+                                                                       FontSize="12"
+                                                                       HorizontalAlignment="Right" />
+                                                        </StackPanel>
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                        <TextBlock Text="暂无可统计的键盘输入"
+                                                   Foreground="{StaticResource MutedTextBrush}"
+                                                   FontSize="14"
+                                                   Margin="0,12,0,0">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding InputLeaderboard.Count}" Value="0">
+                                                            <Setter Property="Visibility" Value="Visible" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Grid.Column="1"
+                                        Style="{StaticResource SurfaceCard}"
+                                        Padding="18"
+                                        Margin="7,0,0,0">
+                                    <Grid>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="320" />
+                                        </Grid.RowDefinitions>
+                                        <TextBlock Text="按键占比" FontSize="20" FontWeight="SemiBold" />
+                                        <TextBlock Grid.Row="1"
+                                                   Text="展示当前分析范围的键盘按键占比，前八名之外合并为其他按键。"
+                                                   Foreground="{StaticResource MutedTextBrush}"
+                                                   FontSize="13"
+                                                   TextWrapping="Wrap"
+                                                   Margin="0,4,0,0" />
+                                        <!-- PlotView 使用卡片的完整矩形区域，为外部标签与引线保留横向空间；
+                                             PieSeries 自身仍按较短边计算圆形半径。 -->
+                                        <oxy:PlotView Grid.Row="2"
+                                                      HorizontalAlignment="Stretch"
+                                                      VerticalAlignment="Stretch"
+                                                      IsMouseWheelEnabled="False"
+                                                      ClipToBounds="True"
+                                                      Background="Transparent"
+                                                      Model="{Binding KeyDistributionPlot}" />
+                                    </Grid>
+                                </Border>
+                            </Grid>
+
+                            <Border Grid.Row="4"
+                                    Style="{StaticResource SurfaceCard}"
+                                    Padding="18"
+                                    Margin="0">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="300" />
+                                    </Grid.RowDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="输入类型分布" FontSize="20" FontWeight="SemiBold" />
+                                        <TextBlock Text="把键盘、鼠标按键与滚轮拆开统计，便于观察当前分析范围的输入习惯。"
+                                                   Foreground="{StaticResource MutedTextBrush}"
+                                                   FontSize="13"
+                                                   Margin="0,4,0,0" />
+                                    </StackPanel>
+                                    <!-- 宽卡片直接提供完整绘图区，避免正方形容器裁掉左右标签。 -->
+                                    <oxy:PlotView Grid.Row="1"
+                                                  HorizontalAlignment="Stretch"
+                                                  VerticalAlignment="Stretch"
+                                                  IsMouseWheelEnabled="False"
+                                                  ClipToBounds="True"
+                                                  Background="Transparent"
+                                                  Model="{Binding CategoryDistributionPlot}" />
+                                </Grid>
+                            </Border>
+                        </Grid>
+                    </ScrollViewer>
                 </TabItem>
 
                 <TabItem>
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
-                        <StackPanel Margin="30" MaxWidth="760" HorizontalAlignment="Left">
-                            <TextBlock Text="设置" FontSize="28" FontWeight="SemiBold" />
-                            <TextBlock Text="键盘配列" FontWeight="SemiBold" Margin="0,24,0,5" />
-                            <StackPanel Orientation="Horizontal">
-                                <Button Content="ANSI 104" Click="AnsiLayoutClick" Width="120" />
-                                <Button Content="75% 配列" Click="CompactLayoutClick" Width="120" Margin="8,4,0,4" />
+                        <Grid Margin="22,4,22,100" HorizontalAlignment="Stretch">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="0.9*" MinWidth="260" />
+                                <ColumnDefinition Width="1.25*" MinWidth="340" />
+                                <ColumnDefinition Width="1*" MinWidth="280" />
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel>
+                                <Border Style="{StaticResource SurfaceCard}" Padding="24">
+                                    <StackPanel>
+                                        <TextBlock Text="键盘配列" FontSize="20" FontWeight="SemiBold" />
+                                        <TextBlock Text="只改变可视化布局，不影响底层计数。"
+                                                   Foreground="{StaticResource MutedTextBrush}"
+                                                   FontSize="13"
+                                                   Margin="0,4,0,14" />
+                                        <StackPanel Orientation="Horizontal">
+                                            <Button Content="ANSI 104"
+                                                    Style="{StaticResource ChoiceButton}"
+                                                    Tag="{Binding IsAnsiLayout}"
+                                                    Click="AnsiLayoutClick"
+                                                    Width="120" />
+                                            <Button Content="75% 配列"
+                                                    Style="{StaticResource ChoiceButton}"
+                                                    Tag="{Binding IsCompactLayout}"
+                                                    Click="CompactLayoutClick"
+                                                    Width="120"
+                                                    Margin="8,4,0,4" />
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Style="{StaticResource SurfaceCard}" Padding="24">
+                                    <StackPanel>
+                                        <TextBlock Text="记录控制" FontSize="20" FontWeight="SemiBold" />
+                                        <TextBlock Text="{Binding CaptureControlHint}"
+                                                   Foreground="{StaticResource MutedTextBrush}"
+                                                   FontSize="13"
+                                                   Margin="0,4,0,14" />
+                                        <StackPanel Orientation="Horizontal">
+                                            <Button Content="{Binding CaptureActionText}"
+                                                    Style="{StaticResource CaptureActionButton}"
+                                                    Tag="{Binding IsCapturePaused}"
+                                                    IsEnabled="{Binding CanToggleCapture}"
+                                                    Click="ToggleCaptureClick"
+                                                    Width="130" />
+                                            <Button Content="立即保存"
+                                                    Style="{StaticResource SecondaryButton}"
+                                                    Click="SaveNowClick"
+                                                    Width="112"
+                                                    Margin="8,4,0,4" />
+                                        </StackPanel>
+                                        <CheckBox Content="登录 Windows 后自动启动"
+                                                  IsChecked="{Binding Settings.StartWithWindows}"
+                                                  Click="AutostartClick"
+                                                  Margin="0,16,0,0" />
+                                    </StackPanel>
+                                </Border>
                             </StackPanel>
-                            <TextBlock Text="记录控制" FontWeight="SemiBold" Margin="0,22,0,5" />
-                            <StackPanel Orientation="Horizontal">
-                                <Button Content="暂停 / 恢复" Click="ToggleCaptureClick" Width="130" />
-                                <Button Content="立即保存" Click="SaveNowClick" Width="110" Margin="8,4,0,4" />
+
+                            <StackPanel Grid.Column="1">
+                                <Border Style="{StaticResource SurfaceCard}" Padding="24">
+                                    <StackPanel>
+                                        <TextBlock Text="外观" FontSize="20" FontWeight="SemiBold" />
+                                        <TextBlock Text="主题色会应用到按钮、选中态、标签和浮岛。"
+                                                   Foreground="{StaticResource MutedTextBrush}"
+                                                   FontSize="13"
+                                                   Margin="0,4,0,14" />
+
+                                        <TextBlock Text="主题调色盘" FontWeight="SemiBold" />
+                                        <WrapPanel x:Name="ThemeSwatches" Margin="0,10,0,2">
+                                            <Button Style="{StaticResource ThemeSwatchButton}" Background="#6F9F9D" Tag="#6F9F9D" ToolTip="清透青" Click="ThemeColorSwatchClick" />
+                                            <Button Style="{StaticResource ThemeSwatchButton}" Background="#86A9CF" Tag="#86A9CF" ToolTip="晴空蓝" Click="ThemeColorSwatchClick" />
+                                            <Button Style="{StaticResource ThemeSwatchButton}" Background="#A8D1CB" Tag="#A8D1CB" ToolTip="薄荷绿" Click="ThemeColorSwatchClick" />
+                                            <Button Style="{StaticResource ThemeSwatchButton}" Background="#F3D48D" Tag="#F3D48D" ToolTip="麦芽金" Click="ThemeColorSwatchClick" />
+                                            <Button Style="{StaticResource ThemeSwatchButton}" Background="#E8B1A7" Tag="#E8B1A7" ToolTip="柔雾珊瑚" Click="ThemeColorSwatchClick" />
+                                            <Button Style="{StaticResource ThemeSwatchButton}" Background="#B7A8D8" Tag="#B7A8D8" ToolTip="薰衣草紫" Click="ThemeColorSwatchClick" />
+                                            <Button Style="{StaticResource ThemeSwatchButton}" Background="#C79AB7" Tag="#C79AB7" ToolTip="灰玫瑰" Click="ThemeColorSwatchClick" />
+                                            <Button Style="{StaticResource ThemeSwatchButton}" Background="#D89A72" Tag="#D89A72" ToolTip="陶土橙" Click="ThemeColorSwatchClick" />
+                                            <Button Style="{StaticResource ThemeSwatchButton}" Background="#9EBD8E" Tag="#9EBD8E" ToolTip="鼠尾草绿" Click="ThemeColorSwatchClick" />
+                                            <Button Style="{StaticResource ThemeSwatchButton}" Background="#88B6C8" Tag="#88B6C8" ToolTip="湖水蓝" Click="ThemeColorSwatchClick" />
+                                        </WrapPanel>
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBox Text="{Binding ThemeColorHexText, UpdateSourceTrigger=PropertyChanged}"
+                                                     Style="{StaticResource SettingsTextBox}"
+                                                     Width="150"
+                                                     MaxLength="7"
+                                                     ToolTip="六位十六进制颜色，例如 #F3D48D" />
+                                            <Button Content="应用主题色"
+                                                    Click="ApplyThemeColorClick"
+                                                    Width="116"
+                                                    Height="42"
+                                                    Margin="8,5,0,5" />
+                                        </StackPanel>
+                                        <TextBlock Text="{Binding ThemeColorStatus}"
+                                                   Foreground="{StaticResource MutedTextBrush}"
+                                                   FontSize="13"
+                                                   TextWrapping="Wrap"
+                                                   Margin="0,5,0,18" />
+
+                                        <TextBlock Text="界面字体" FontWeight="SemiBold" />
+                                        <ComboBox ItemsSource="{Binding FontFamilyOptions}"
+                                                  SelectedValuePath="Value"
+                                                  SelectedValue="{Binding FontFamily, Mode=OneWay}"
+                                                  SelectionChanged="FontFamilyChanged"
+                                                  ToolTip="字体未安装时会自动回退到系统字体">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Text="{Binding DisplayName}" />
+                                                </DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+                                        <TextBlock Text="Segoe UI Variable 更适合数字与英文；中文环境也会自动回退到可用字形。"
+                                                   Foreground="{StaticResource MutedTextBrush}"
+                                                   FontSize="12"
+                                                   TextWrapping="Wrap"
+                                                   Margin="0,2,0,14" />
+
+                                        <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,16" />
+                                        <TextBlock Text="单个按键热力阈值" FontWeight="SemiBold" />
+                                        <TextBlock Text="单键从白色进入灰蓝、琥珀和珊瑚红；活跃分数自动采用十倍阈值。"
+                                                   Foreground="{StaticResource MutedTextBrush}"
+                                                   FontSize="13"
+                                                   Margin="0,4,0,10" />
+                                        <UniformGrid Columns="3">
+                                            <StackPanel Margin="0,0,8,0">
+                                                <TextBlock Text="冷色节点" Foreground="{StaticResource MutedTextBrush}" FontSize="13" />
+                                                <TextBox Text="{Binding HeatmapCoolThresholdText, UpdateSourceTrigger=PropertyChanged}"
+                                                         Style="{StaticResource SettingsTextBox}" />
+                                            </StackPanel>
+                                            <StackPanel Margin="0,0,8,0">
+                                                <TextBlock Text="暖色节点" Foreground="{StaticResource MutedTextBrush}" FontSize="13" />
+                                                <TextBox Text="{Binding HeatmapWarmThresholdText, UpdateSourceTrigger=PropertyChanged}"
+                                                         Style="{StaticResource SettingsTextBox}" />
+                                            </StackPanel>
+                                            <StackPanel>
+                                                <TextBlock Text="红色节点" Foreground="{StaticResource MutedTextBrush}" FontSize="13" />
+                                                <TextBox Text="{Binding HeatmapHotThresholdText, UpdateSourceTrigger=PropertyChanged}"
+                                                         Style="{StaticResource SettingsTextBox}" />
+                                            </StackPanel>
+                                        </UniformGrid>
+                                        <Button Content="应用热力阈值"
+                                                Click="ApplyHeatmapThresholdsClick"
+                                                Width="132"
+                                                HorizontalAlignment="Left"
+                                                Margin="0,8,0,4" />
+                                        <TextBlock Text="{Binding HeatmapThresholdStatus}"
+                                                   Foreground="{StaticResource MutedTextBrush}"
+                                                   FontSize="13"
+                                                   TextWrapping="Wrap"
+                                                   Margin="0,4,0,0" />
+                                        <Border Background="{DynamicResource AccentContainerBrush}"
+                                                CornerRadius="10"
+                                                Padding="12,9"
+                                                Margin="0,12,0,0">
+                                            <TextBlock Text="{Binding ScoreHeatmapThresholdSummary}"
+                                                       Foreground="{DynamicResource AccentTextBrush}"
+                                                       FontSize="13"
+                                                       FontWeight="SemiBold"
+                                                       TextWrapping="Wrap" />
+                                        </Border>
+                                    </StackPanel>
+                                </Border>
                             </StackPanel>
-                            <TextBlock Text="数据管理" FontWeight="SemiBold" Margin="0,22,0,5" />
-                            <WrapPanel>
-                                <Button Content="导出今日 CSV" Click="ExportClick" Width="130" />
-                                <Button Content="创建备份" Click="BackupClick" Width="110" Margin="8,4,0,4" />
-                                <Button Content="恢复备份" Click="RestoreClick" Width="110" Margin="8,4,0,4" />
-                                <Button Content="删除历史页所选范围" Click="DeleteRangeClick" Width="170" Margin="8,4,0,4" />
-                            </WrapPanel>
-                            <CheckBox Content="登录 Windows 后自动启动" IsChecked="{Binding Settings.StartWithWindows}" Click="AutostartClick" Margin="0,20,0,0" />
-                            <Separator Margin="0,24" Background="{StaticResource BorderBrush}" />
-                            <TextBlock Text="数据目录" FontWeight="SemiBold" />
-                            <TextBlock Text="{Binding DataDirectory}" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" Margin="0,5,0,0" />
-                            <TextBlock Text="{Binding VersionText}" Foreground="{StaticResource MutedTextBrush}" Margin="0,18,0,0" />
-                            <TextBlock Text="完全离线 · 不记录输入内容 · 第三方许可证见 Licenses 目录" Foreground="{StaticResource MutedTextBrush}" Margin="0,5,0,0" />
-                        </StackPanel>
+
+                            <StackPanel Grid.Column="2">
+                                <Border Style="{StaticResource SurfaceCard}" Padding="24">
+                                    <StackPanel>
+                                        <TextBlock Text="本地数据" FontSize="20" FontWeight="SemiBold" />
+                                        <TextBlock Text="所有操作均在本机完成，成功后会显示 Windows 通知；按日期删除请前往 分析 → 历史分析仪表盘。"
+                                                   Foreground="{StaticResource MutedTextBrush}"
+                                                   FontSize="13"
+                                                   Margin="0,4,0,14" />
+                                        <WrapPanel>
+                                            <Button Content="导出 CSV" Click="ExportClick" Width="112" />
+                                            <Button Content="创建备份" Style="{StaticResource SecondaryButton}" Click="BackupClick" Width="112" Margin="8,4,0,4" />
+                                            <Button Content="恢复备份" Style="{StaticResource SecondaryButton}" Click="RestoreClick" Width="112" />
+                                        </WrapPanel>
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Style="{StaticResource SurfaceCard}" Padding="24">
+                                    <StackPanel>
+                                        <TextBlock Text="关于" FontSize="20" FontWeight="SemiBold" />
+                                        <TextBlock Text="{Binding VersionText}" Foreground="{DynamicResource AccentTextBrush}" Margin="0,10,0,0" />
+                                        <TextBlock Text="{Binding DataDirectory}"
+                                                   Foreground="{StaticResource MutedTextBrush}"
+                                                   FontSize="13"
+                                                   TextWrapping="Wrap"
+                                                   Margin="0,8,0,0" />
+                                        <TextBlock Text="完全离线 · 不记录输入内容 · 第三方许可证见 Licenses 目录"
+                                                   Foreground="{StaticResource MutedTextBrush}"
+                                                   FontSize="13"
+                                                   TextWrapping="Wrap"
+                                                   Margin="0,12,0,0" />
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                        </Grid>
                     </ScrollViewer>
                 </TabItem>
             </TabControl>
         </Grid>
+
+        <!-- 底部浮岛导航：按距离自动收回，也支持手动锁定收回状态。 -->
+        <Border x:Name="NavigationDock"
+                Panel.ZIndex="20"
+                Height="74"
+                MinWidth="600"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Bottom"
+                Margin="18,0,18,10"
+                Padding="14,10,14,8"
+                Background="{StaticResource CardBrush}"
+                BorderBrush="{StaticResource BorderBrush}"
+                BorderThickness="1"
+                CornerRadius="25"
+                MouseEnter="NavigationDockMouseEnter"
+                MouseLeave="NavigationDockMouseLeave">
+            <Border.RenderTransform>
+                <TranslateTransform x:Name="NavigationDockTranslate" />
+            </Border.RenderTransform>
+            <Grid>
+                <Image Width="46"
+                       Height="46"
+                       HorizontalAlignment="Left"
+                       VerticalAlignment="Center"
+                       Source="Assets/inputatlas-esc-icon.png"
+                       RenderOptions.BitmapScalingMode="HighQuality"
+                       ToolTip="InputAtlas" />
+
+                <ListBox SelectedIndex="{Binding PageIndex}"
+                         HorizontalAlignment="Center"
+                         VerticalAlignment="Center"
+                         Background="Transparent"
+                         BorderThickness="0"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                         ScrollViewer.VerticalScrollBarVisibility="Disabled">
+                    <ListBox.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Orientation="Horizontal" />
+                        </ItemsPanelTemplate>
+                    </ListBox.ItemsPanel>
+                    <ListBox.ItemContainerStyle>
+                        <Style TargetType="ListBoxItem" BasedOn="{StaticResource NavItemStyle}">
+                            <Setter Property="Padding" Value="15,10" />
+                            <Setter Property="Margin" Value="2,0" />
+                            <Setter Property="HorizontalContentAlignment" Value="Center" />
+                        </Style>
+                    </ListBox.ItemContainerStyle>
+                    <ListBoxItem>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE80F;" FontFamily="Segoe Fluent Icons" FontSize="17" Margin="0,0,8,0" />
+                            <TextBlock Text="首页" FontWeight="SemiBold" />
+                        </StackPanel>
+                    </ListBoxItem>
+                    <ListBoxItem>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE9D2;" FontFamily="Segoe Fluent Icons" FontSize="17" Margin="0,0,8,0" />
+                            <TextBlock Text="分析" FontWeight="SemiBold" />
+                        </StackPanel>
+                    </ListBoxItem>
+                    <ListBoxItem>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE713;" FontFamily="Segoe Fluent Icons" FontSize="17" Margin="0,0,8,0" />
+                            <TextBlock Text="设置" FontWeight="SemiBold" />
+                        </StackPanel>
+                    </ListBoxItem>
+                </ListBox>
+
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <StackPanel VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                            <Ellipse Width="8" Height="8" VerticalAlignment="Center">
+                                <Ellipse.Style>
+                                    <Style TargetType="Ellipse">
+                                        <Setter Property="Fill" Value="{StaticResource MutedTextBrush}" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsCaptureRecording}" Value="True">
+                                                <Setter Property="Fill" Value="{StaticResource RecordingIndicatorBrush}" />
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding IsCapturePaused}" Value="True">
+                                                <Setter Property="Fill" Value="{StaticResource PausedIndicatorBrush}" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Ellipse.Style>
+                            </Ellipse>
+                            <TextBlock Text="{Binding StatusText}"
+                                       Margin="8,0,0,0"
+                                       FontWeight="SemiBold" />
+                        </StackPanel>
+                        <TextBlock Text="{Binding LastSavedText}"
+                                   Foreground="{StaticResource MutedTextBrush}"
+                                   FontSize="12"
+                                   HorizontalAlignment="Right"
+                                   Margin="0,3,0,0" />
+                    </StackPanel>
+                    <Button Style="{StaticResource IconButton}"
+                            Width="36"
+                            Height="36"
+                            Padding="0"
+                            Margin="10,0,0,0"
+                            Click="NavigationDockCollapseClick"
+                            ToolTip="手动收回浮岛">
+                        <TextBlock Text="&#xE70D;" FontFamily="Segoe Fluent Icons" FontSize="14" />
+                    </Button>
+                </StackPanel>
+
+            </Grid>
+        </Border>
+
+        <Border x:Name="NavigationDockReveal"
+                Panel.ZIndex="21"
+                Width="72"
+                Height="12"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Bottom"
+                Background="{StaticResource CardBrush}"
+                BorderBrush="{StaticResource BorderBrush}"
+                BorderThickness="1,1,1,0"
+                CornerRadius="9,9,0,0"
+                Opacity="0"
+                IsHitTestVisible="False"
+                MouseEnter="NavigationDockMouseEnter"
+                MouseLeftButtonUp="NavigationDockRevealMouseLeftButtonUp"
+                Cursor="Hand"
+                ToolTip="呼出导航浮岛">
+            <Border Width="38"
+                    Height="3"
+                    CornerRadius="2"
+                    Background="{StaticResource BorderBrush}"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center" />
+        </Border>
     </Grid>
 </Window>

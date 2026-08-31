@@ -21,6 +21,8 @@ public sealed class InputCounterEngine
 
     public event Action<InputId>? Counted;
 
+    public event Action<InputId, bool>? StateChanged;
+
     public event Action<BucketSnapshot>? BucketCompleted;
 
     public long BucketStartUtc => Volatile.Read(ref _bucketStartUtc);
@@ -33,7 +35,12 @@ public sealed class InputCounterEngine
 
         if (sample.IsBreak)
         {
-            Volatile.Write(ref _pressed[index], false);
+            if (Volatile.Read(ref _pressed[index]))
+            {
+                Volatile.Write(ref _pressed[index], false);
+                StateChanged?.Invoke(input, false);
+            }
+
             return;
         }
 
@@ -43,6 +50,7 @@ public sealed class InputCounterEngine
         }
 
         Volatile.Write(ref _pressed[index], true);
+        StateChanged?.Invoke(input, true);
         Increment(input);
     }
 
@@ -52,8 +60,8 @@ public sealed class InputCounterEngine
         UpdateButton(sample.Buttons, RawMouseButtons.LeftDown, RawMouseButtons.LeftUp, InputId.MouseLeft);
         UpdateButton(sample.Buttons, RawMouseButtons.RightDown, RawMouseButtons.RightUp, InputId.MouseRight);
         UpdateButton(sample.Buttons, RawMouseButtons.MiddleDown, RawMouseButtons.MiddleUp, InputId.MouseMiddle);
-        UpdateButton(sample.Buttons, RawMouseButtons.Button4Down, RawMouseButtons.Button4Up, InputId.MouseBack);
-        UpdateButton(sample.Buttons, RawMouseButtons.Button5Down, RawMouseButtons.Button5Up, InputId.MouseForward);
+        UpdateButton(sample.Buttons, RawMouseButtons.Button4Down, RawMouseButtons.Button4Up, InputId.MouseForward);
+        UpdateButton(sample.Buttons, RawMouseButtons.Button5Down, RawMouseButtons.Button5Up, InputId.MouseBack);
 
         if ((sample.Buttons & RawMouseButtons.VerticalWheel) != 0)
         {
@@ -93,7 +101,19 @@ public sealed class InputCounterEngine
             updatedUtc);
     }
 
-    public void ResetPressedStates() => Array.Clear(_pressed);
+    public void ResetPressedStates()
+    {
+        for (ushort index = 1; index < _pressed.Length; index++)
+        {
+            if (!Volatile.Read(ref _pressed[index]))
+            {
+                continue;
+            }
+
+            Volatile.Write(ref _pressed[index], false);
+            StateChanged?.Invoke(new InputId(index), false);
+        }
+    }
 
     private void EnsureBucket(long unixSeconds)
     {
@@ -116,9 +136,10 @@ public sealed class InputCounterEngine
         InputId input)
     {
         var index = input.Value;
-        if ((flags & up) != 0)
+        if ((flags & up) != 0 && Volatile.Read(ref _pressed[index]))
         {
             Volatile.Write(ref _pressed[index], false);
+            StateChanged?.Invoke(input, false);
         }
 
         if ((flags & down) == 0 || Volatile.Read(ref _pressed[index]))
@@ -127,6 +148,7 @@ public sealed class InputCounterEngine
         }
 
         Volatile.Write(ref _pressed[index], true);
+        StateChanged?.Invoke(input, true);
         Increment(input);
     }
 
@@ -167,7 +189,9 @@ public sealed class InputCounterEngine
         while (remainder >= 120)
         {
             remainder -= 120;
+            StateChanged?.Invoke(input, true);
             Increment(input);
+            StateChanged?.Invoke(input, false);
         }
     }
 

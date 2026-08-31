@@ -1,14 +1,123 @@
-bin/
-obj/
-artifacts/
-.vs/
-.idea/
-*.user
+# InputAtlas 仓库忽略规则
+# 仅忽略可重新生成的构建产物、本地工具状态、运行数据和敏感文件。
+# 源码、测试、安装器脚本、锁文件、许可证及应用 Assets 不应被忽略。
+
+# .NET / MSBuild 构建缓存与输出
+**/bin/
+**/obj/
+**/out/
+**/publish/
+**/[Dd]ebug/
+**/[Rr]elease/
+*.dll
+*.exe
+*.pdb
+*.mdb
+*.dbg
+*.deps.json
+*.runtimeconfig.json
+*.runtimeconfig.dev.json
+*.cache
+*.binlog
+*.buildlog
+*.tlog
+*.lastbuildstate
+*.FileListAbsolute.txt
+
+# NuGet 本地缓存与打包结果；packages.lock.json 必须保留
+**/packages/
+**/.nuget/
+*.nupkg
+*.snupkg
+
+# 项目发布、安装包和压缩制品
+/artifacts/
+**/installer/Output/
+*.msi
+*.msix
+*.msixbundle
+*.appx
+*.appxbundle
+*.zip
+*.7z
+*.rar
+*.sha256
+
+# 测试、覆盖率与基准测试输出
+**/TestResults/
+**/BenchmarkDotNet.Artifacts/
+**/coverage/
+*.trx
+*.coverage
+*.coveragexml
+coverage*.json
+coverage*.xml
+test-results*.xml
+
+# Visual Studio / Rider / VS Code / 其他 IDE 本地状态
+**/.vs/
+**/.idea/
+**/.vscode/
+**/.fleet/
 *.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.csproj.user
+*.vbproj.user
+*.fsproj.user
+*.DotSettings.user
+*.rsuser
+
+# Codex / 智能体在仓库内产生的运行缓存与临时状态
+**/.codex/
+**/.codex-cache/
+**/.codex-runtime/
+**/.codex-tmp/
+**/.codex-temp/
+**/.codex-worktrees/
+**/.agents/
+
+# InputAtlas 本地运行数据、数据库、日志、备份和导出
+**/Data/
 *.db
 *.db-shm
 *.db-wal
-Data/
-TestResults/
-BenchmarkDotNet.Artifacts/
+*.db-journal
+*.sqlite
+*.sqlite3
+*.sqlite-shm
+*.sqlite-wal
+*.log
+*.dmp
+*.mdmp
+*.stackdump
 
+# 本机配置、环境变量和签名私钥
+.env
+.env.*
+!.env.example
+appsettings.Development.json
+appsettings.Local.json
+*.pfx
+*.p12
+*.snk
+*.key
+*.pem
+
+# 临时文件、编辑器备份和操作系统元数据
+*.tmp
+*.temp
+*.bak
+*.old
+*.orig
+*.rej
+*~
+~$*
+.DS_Store
+._*
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+System Volume Information/

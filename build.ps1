@@ -91,19 +91,34 @@ function Invoke-Benchmarks {
 }
 
 function Invoke-Publish {
+    Write-Host '[发布] 准备 win-x64 自包含发布目录…'
     if (Test-Path -LiteralPath $script:PublishRoot) {
         Remove-Item -LiteralPath $script:PublishRoot -Recurse -Force
     }
     New-Item -ItemType Directory -Path $script:PublishRoot -Force | Out-Null
 
-    Invoke-DotNet publish (Join-Path $script:RepoRoot 'src\InputAtlas.App\InputAtlas.App.csproj') '-c' 'Release' '--no-restore' '-r' 'win-x64' '--self-contained' 'false' '-o' $script:PublishRoot ('-p:Version=' + $Version) '-p:DebugType=None' '-p:DebugSymbols=false'
+    Write-Host '[发布] 编译 Release 自包含应用；目标机器无需预装 .NET 10。'
+    Invoke-DotNet publish (Join-Path $script:RepoRoot 'src\InputAtlas.App\InputAtlas.App.csproj') '-c' 'Release' '--no-restore' '-r' 'win-x64' '--self-contained' 'true' '-o' $script:PublishRoot ('-p:Version=' + $Version) '-p:DebugType=None' '-p:DebugSymbols=false' '-p:PublishSingleFile=false'
     Get-ChildItem -LiteralPath $script:PublishRoot -Filter '*.pdb' -File | Remove-Item -Force
-    $size = (Get-ChildItem -LiteralPath $script:PublishRoot -File -Recurse | Measure-Object -Property Length -Sum).Sum
-    $limit = 10MB
-    Write-Host ("发布目录大小：{0:N2} MB" -f ($size / 1MB))
-    if ($size -gt $limit) {
-        throw '发布目录超过 10 MB 硬门禁。'
+
+    $requiredFiles = @(
+        'InputAtlas.exe',
+        'coreclr.dll',
+        'hostfxr.dll',
+        'hostpolicy.dll',
+        'PresentationFramework.dll'
+    )
+    foreach ($requiredFile in $requiredFiles) {
+        $requiredPath = Join-Path $script:PublishRoot $requiredFile
+        if (-not (Test-Path -LiteralPath $requiredPath -PathType Leaf)) {
+            throw "自包含发布校验失败：缺少 $requiredFile。"
+        }
+        Write-Host "[发布] 已验证运行时文件：$requiredFile"
     }
+
+    $size = (Get-ChildItem -LiteralPath $script:PublishRoot -File -Recurse | Measure-Object -Property Length -Sum).Sum
+    Write-Host ("[发布] 自包含发布目录大小：{0:N2} MB" -f ($size / 1MB))
+    Write-Host '[发布] 自包含运行时校验完成，安装器无需检查或下载 .NET。'
 }
 
 function Invoke-Ci {
@@ -124,6 +139,8 @@ function Invoke-Package {
     if ($LASTEXITCODE -ne 0) {
         throw "Inno Setup 编译失败，退出码 $LASTEXITCODE。"
     }
+    Write-ReleaseMetadata
+    Write-Host "Release 安装包已生成：$script:PackageRoot"
 }
 
 function Write-ReleaseMetadata {
@@ -144,6 +161,9 @@ function Write-ReleaseMetadata {
         powershell = $PSVersionTable.PSVersion.ToString()
         windows = [Environment]::OSVersion.VersionString
         inno_setup = '7.1.0'
+        deployment = 'self-contained win-x64'
+        requires_dotnet_runtime = $false
+        installer_network_downloads = $false
         files = @($files | ForEach-Object {
             [ordered]@{
                 name = $_.Name

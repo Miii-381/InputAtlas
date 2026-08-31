@@ -31,6 +31,7 @@ RestartApplications=no
 WizardStyle=modern dynamic
 DisableProgramGroupPage=yes
 SetupLogging=yes
+AppComments=自包含离线安装；无需预装或下载 .NET 10
 
 [Languages]
 Name: "chinesesimp"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
@@ -57,23 +58,6 @@ var
 
 function WindowsGetDriveType(RootPathName: String): Cardinal;
   external 'GetDriveTypeW@kernel32.dll stdcall';
-
-function HasDotNet10DesktopRuntime: Boolean;
-var
-  Versions: TArrayOfString;
-  Index: Integer;
-begin
-  Result := False;
-  if RegGetSubkeyNames(HKLM64, 'SOFTWARE\dotnet\Setup\InstalledVersions\x64\sharedfx\Microsoft.WindowsDesktop.App', Versions) then
-  begin
-    for Index := 0 to GetArrayLength(Versions) - 1 do
-      if Pos('10.', Versions[Index]) = 1 then
-      begin
-        Result := True;
-        Exit;
-      end;
-  end;
-end;
 
 function IsForbiddenDirectory(const Directory: String): Boolean;
 var
@@ -129,13 +113,14 @@ var
   ResultCode: Integer;
 begin
   Result := '';
+  Log('InputAtlas 使用自包含 .NET 10 运行时，不执行运行时检测或在线下载。');
   if FileExists(ExpandConstant('{app}\{#MyAppExeName}')) then
   begin
+    Log('检测到已安装实例，正在请求安全退出以便升级。');
     Exec(ExpandConstant('{app}\{#MyAppExeName}'), '--shutdown-for-update', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
     Sleep(500);
+    Log(Format('已安装实例退出请求完成，退出码：%d。', [ResultCode]));
   end;
-  if not HasDotNet10DesktopRuntime then
-    Result := '.NET 10 Desktop Runtime x64 未安装。请先使用离线安装包安装运行时；安装器不会联网下载。';
 end;
 
 function InitializeUninstall: Boolean;

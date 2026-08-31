@@ -17,8 +17,10 @@ public partial class App : Application, IAsyncDisposable
     private CapturePersistenceCoordinator? _coordinator;
     private AppSettingsStore? _settingsStore;
     private AppSettings? _settings;
+    private MainViewModel? _viewModel;
     private MainWindow? _window;
     private Forms.NotifyIcon? _tray;
+    private System.Drawing.Icon? _trayIcon;
     private bool _shutdownStarted;
 
     protected override async void OnStartup(StartupEventArgs e)
@@ -26,10 +28,23 @@ public partial class App : Application, IAsyncDisposable
         base.OnStartup(e);
         try
         {
+            var startupCommand = e.Args.Contains("--shutdown-for-update", StringComparer.OrdinalIgnoreCase)
+                ? "shutdown-for-update"
+                : "activate";
             _singleInstance = new SingleInstanceCoordinator();
             if (!_singleInstance.TryAcquire())
             {
-                await _singleInstance.SendCommandAsync("activate", TimeSpan.FromSeconds(1));
+                var sent = await _singleInstance.SendCommandAsync(startupCommand, TimeSpan.FromSeconds(3));
+                Debug.WriteLine($"InputAtlas 单实例命令已发送：command={startupCommand} sent={sent}");
+                Shutdown();
+                return;
+            }
+
+            if (string.Equals(startupCommand, "shutdown-for-update", StringComparison.Ordinal))
+            {
+                Debug.WriteLine("InputAtlas 未发现运行中的主实例，无需执行升级前关闭。");
+                await _singleInstance.DisposeAsync();
+                _singleInstance = null;
                 Shutdown();
                 return;
             }
@@ -39,10 +54,29 @@ public partial class App : Application, IAsyncDisposable
             _log = new AsyncRollingLog(logRoot);
             _log.Information(
                 "application_start",
-                $"version={GetVersion()} architecture={RuntimeInformation.ProcessArchitecture} runtime={Environment.Version}");
+                $"version={GetVersion()} architecture={RuntimeInformation.ProcessArchitecture} runtime={Environment.Version} per_monitor_v2={Program.PerMonitorV2Enabled}");
+            StartSingleInstanceCommandServer();
 
             _settingsStore = new AppSettingsStore(Path.Combine(dataRoot, "config.json"));
             _settings = await _settingsStore.LoadAsync();
+            if (!ThemeColorService.TryNormalize(_settings.AccentColor, out var normalizedAccent))
+            {
+                normalizedAccent = ThemeColorService.DefaultAccentColor;
+                _settings = _settings with { AccentColor = normalizedAccent };
+                await _settingsStore.SaveAsync(_settings);
+                _log.Information("settings_accent_color_repaired", $"accent={normalizedAccent}");
+            }
+
+            ThemeColorService.Apply(normalizedAccent);
+            var normalizedFontFamily = FontFamilyService.Normalize(_settings.FontFamily);
+            if (!string.Equals(normalizedFontFamily, _settings.FontFamily, StringComparison.Ordinal))
+            {
+                _settings = _settings with { FontFamily = normalizedFontFamily };
+                await _settingsStore.SaveAsync(_settings);
+                _log.Information("settings_font_family_repaired", $"font_family={normalizedFontFamily}");
+            }
+
+            FontFamilyService.Apply(normalizedFontFamily);
             _repository = new SqliteBucketRepository(Path.Combine(dataRoot, "inputatlas.db"));
             await _repository.InitializeAsync();
 
@@ -79,22 +113,12 @@ public partial class App : Application, IAsyncDisposable
                 _settingsStore,
                 _settings,
                 _log);
+            _viewModel = viewModel;
             _window = new MainWindow(viewModel, _settings);
             MainWindow = _window;
+            viewModel.OperationCompleted += OperationCompleted;
             _window.Show();
             CreateTrayIcon(viewModel);
-
-            _singleInstance.StartServer(command => Dispatcher.InvokeAsync(async () =>
-            {
-                if (string.Equals(command, "activate", StringComparison.Ordinal))
-                {
-                    ShowMainWindow();
-                }
-                else if (string.Equals(command, "shutdown-for-update", StringComparison.Ordinal))
-                {
-                    await ShutdownApplicationAsync();
-                }
-            }).Task.Unwrap());
 
             if (e.Args.Contains("--startup", StringComparer.OrdinalIgnoreCase))
             {
@@ -143,6 +167,12 @@ public partial class App : Application, IAsyncDisposable
         try
         {
             _log?.Information("application_shutdown", "应用开始受控退出");
+            if (_viewModel is not null)
+            {
+                _viewModel.OperationCompleted -= OperationCompleted;
+                _viewModel = null;
+            }
+
             if (_window is not null)
             {
                 _window.AllowClose();
@@ -170,6 +200,8 @@ public partial class App : Application, IAsyncDisposable
 
             _tray?.Dispose();
             _tray = null;
+            _trayIcon?.Dispose();
+            _trayIcon = null;
             if (_log is not null)
             {
                 await _log.DisposeAsync();
@@ -193,19 +225,52 @@ public partial class App : Application, IAsyncDisposable
 
     private void CreateTrayIcon(MainViewModel viewModel)
     {
+        _trayIcon = System.Drawing.Icon.ExtractAssociatedIcon(Environment.ProcessPath!)
+            ?? (System.Drawing.Icon)System.Drawing.SystemIcons.Application.Clone();
         _tray = new Forms.NotifyIcon
         {
             Text = "InputAtlas 输入图谱",
-            Icon = System.Drawing.SystemIcons.Application,
+            Icon = _trayIcon,
             Visible = true,
         };
         _tray.DoubleClick += (_, _) => Dispatcher.Invoke(ShowMainWindow);
         var menu = new Forms.ContextMenuStrip();
         menu.Items.Add("打开", null, (_, _) => Dispatcher.Invoke(ShowMainWindow));
         menu.Items.Add("暂停/恢复", null, async (_, _) => await Dispatcher.InvokeAsync(viewModel.ToggleCaptureAsync));
-        menu.Items.Add("立即保存", null, async (_, _) => await Dispatcher.InvokeAsync(viewModel.SaveNowAsync));
+        menu.Items.Add("立即保存", null, async (_, _) => await Dispatcher.InvokeAsync(async () => await viewModel.SaveNowAsync()));
         menu.Items.Add("退出", null, async (_, _) => await Dispatcher.InvokeAsync(ShutdownApplicationAsync));
         _tray.ContextMenuStrip = menu;
+    }
+
+    private void OperationCompleted(string title, string message)
+    {
+        _log?.Information("windows_notification_requested", $"title={title} message={message}");
+        _tray?.ShowBalloonTip(3500, title, message, Forms.ToolTipIcon.Info);
+    }
+
+    private void StartSingleInstanceCommandServer()
+    {
+        _singleInstance!.StartServer(command =>
+        {
+            _log?.Information("single_instance_command_received", $"command={command}");
+            Dispatcher.BeginInvoke(() =>
+            {
+                if (string.Equals(command, "activate", StringComparison.Ordinal))
+                {
+                    ShowMainWindow();
+                }
+                else if (string.Equals(command, "shutdown-for-update", StringComparison.Ordinal))
+                {
+                    _ = ShutdownApplicationAsync();
+                }
+                else
+                {
+                    _log?.Warning("single_instance_command_ignored", $"command={command}");
+                }
+            });
+            return Task.CompletedTask;
+        });
+        _log?.Information("single_instance_server_started", "单实例命令服务已就绪");
     }
 
     private static string GetVersion() =>

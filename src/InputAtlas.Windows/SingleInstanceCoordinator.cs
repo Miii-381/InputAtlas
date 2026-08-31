@@ -150,4 +150,3 @@ public sealed class SingleInstanceCoordinator : IAsyncDisposable, IDisposable
         _shutdown.Dispose();
     }
 }
-

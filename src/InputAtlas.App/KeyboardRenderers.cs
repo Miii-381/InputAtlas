@@ -13,6 +13,11 @@ public interface IKeyboardRenderer
         KeyboardLayoutDefinition layout,
         IReadOnlyDictionary<InputId, long> counts,
         InputId? selected,
+        HeatmapThresholds thresholds,
+        HeatmapThresholdMode thresholdMode,
+        IReadOnlyDictionary<InputId, double> animationProgress,
+        Color accentColor,
+        FontFamily fontFamily,
         double pixelsPerDip);
 
     InputId? HitTest(Point point, Size size, KeyboardLayoutDefinition layout);
@@ -20,7 +25,8 @@ public interface IKeyboardRenderer
 
 public sealed class KeyboardRenderer2D : IKeyboardRenderer
 {
-    private const double Gap = 3;
+    private const double Gap = 4;
+    private const double CanvasPadding = 14;
 
     public void Render(
         DrawingContext context,
@@ -28,50 +34,82 @@ public sealed class KeyboardRenderer2D : IKeyboardRenderer
         KeyboardLayoutDefinition layout,
         IReadOnlyDictionary<InputId, long> counts,
         InputId? selected,
+        HeatmapThresholds thresholds,
+        HeatmapThresholdMode thresholdMode,
+        IReadOnlyDictionary<InputId, double> animationProgress,
+        Color accentColor,
+        FontFamily fontFamily,
         double pixelsPerDip)
     {
         var scale = CalculateScale(size, layout);
         var offset = CalculateOffset(size, layout, scale);
-        var maximum = Math.Max(1, counts.Where(pair => pair.Key.Value < 900).Select(static pair => pair.Value).DefaultIfEmpty().Max());
+        DrawKeyboardDeck(context, layout, offset, scale, accentColor);
+
         foreach (var key in layout.Keys)
         {
             var rect = ToRect(key, offset, scale);
             rect.Inflate(-Gap / 2, -Gap / 2);
-            counts.TryGetValue(key.Input, out var count);
-            var fill = key.Observable ? HeatBrush(count, maximum) : new SolidColorBrush(Color.FromRgb(51, 65, 85));
-            var border = selected == key.Input
-                ? new Pen(new SolidColorBrush(Color.FromRgb(248, 250, 252)), 2.2)
-                : new Pen(new SolidColorBrush(Color.FromRgb(71, 85, 105)), 1);
-            context.DrawRoundedRectangle(fill, border, rect, 5, 5);
+            animationProgress.TryGetValue(key.Input, out var pressed);
+            if (pressed > 0)
+            {
+                rect.Inflate(-rect.Width * 0.015 * pressed, -rect.Height * 0.015 * pressed);
+                rect.Offset(0, 2.2 * pressed);
+            }
 
-            var labelSize = Math.Clamp(scale * 0.18, 8, 12);
+            counts.TryGetValue(key.Input, out var count);
+            var baseColor = key.Observable
+                ? HeatmapPalette.GetColor(count, Color.FromRgb(255, 252, 246), thresholds, thresholdMode)
+                : Color.FromRgb(241, 233, 222);
+            var fillColor = pressed > 0
+                ? Blend(baseColor, accentColor, pressed * 0.44)
+                : baseColor;
+            var shadowRect = rect;
+            shadowRect.Offset(0, Math.Max(0.7, 2.3 - pressed * 1.6));
+            context.DrawRoundedRectangle(
+                new SolidColorBrush(Color.FromArgb(35, 29, 27, 32)),
+                null,
+                shadowRect,
+                7,
+                7);
+
+            var border = selected == key.Input
+                ? new Pen(new SolidColorBrush(accentColor), 2.3)
+                : new Pen(new SolidColorBrush(pressed > 0 ? accentColor : Color.FromRgb(220, 209, 193)), pressed > 0 ? 1.6 : 1.1);
+            context.DrawRoundedRectangle(new SolidColorBrush(fillColor), border, rect, 7, 7);
+
+            var useLightText = RelativeLuminance(fillColor) < 0.47;
+            var primaryText = useLightText ? Color.FromRgb(255, 255, 255) : Color.FromRgb(49, 45, 40);
+            var secondaryText = useLightText ? Color.FromArgb(220, 255, 255, 255) : Color.FromRgb(117, 109, 100);
             var label = new FormattedText(
                 key.Label,
                 CultureInfo.CurrentUICulture,
                 FlowDirection.LeftToRight,
-                new Typeface("Microsoft YaHei UI"),
-                labelSize,
-                Brushes.White,
-                pixelsPerDip);
-            context.DrawText(label, new Point(rect.X + 6, rect.Y + 4));
-
-            var valueText = key.Observable ? count.ToString("N0", CultureInfo.CurrentCulture) : "不可统计";
-            var value = new FormattedText(
-                valueText,
-                CultureInfo.CurrentUICulture,
-                FlowDirection.LeftToRight,
-                new Typeface(new FontFamily("Microsoft YaHei UI"), FontStyles.Normal, FontWeights.SemiBold, FontStretches.Normal),
-                Math.Clamp(scale * 0.19, 8, 13),
-                key.Observable ? Brushes.White : new SolidColorBrush(Color.FromRgb(148, 163, 184)),
+                new Typeface(fontFamily, FontStyles.Normal, FontWeights.Medium, FontStretches.Normal),
+                Math.Clamp(scale * 0.18, 8.5, 12.5),
+                new SolidColorBrush(primaryText),
                 pixelsPerDip)
             {
-                MaxTextWidth = Math.Max(1, rect.Width - 10),
+                MaxTextWidth = Math.Max(1, rect.Width - 8),
+                Trimming = TextTrimming.CharacterEllipsis,
+            };
+            context.DrawText(label, new Point(rect.X + 4.5, rect.Y + 3));
+
+            var value = new FormattedText(
+                key.Observable ? count.ToString("N0", CultureInfo.CurrentCulture) : "—",
+                CultureInfo.CurrentUICulture,
+                FlowDirection.LeftToRight,
+                new Typeface(fontFamily, FontStyles.Normal, FontWeights.SemiBold, FontStretches.Normal),
+                Math.Clamp(scale * 0.19, 8.5, 13.5),
+                key.Observable ? new SolidColorBrush(primaryText) : new SolidColorBrush(secondaryText),
+                pixelsPerDip)
+            {
+                MaxTextWidth = Math.Max(1, rect.Width - 8),
                 TextAlignment = TextAlignment.Right,
                 Trimming = TextTrimming.CharacterEllipsis,
             };
-            if (rect.Height >= 33 && rect.Width >= 32)
+            if (rect.Height >= 24 && rect.Width >= 23)
             {
-                context.DrawText(value, new Point(rect.X + 5, rect.Bottom - value.Height - 4));
+                context.DrawText(value, new Point(rect.X + 4, rect.Bottom - value.Height - 2.5));
             }
         }
     }
@@ -98,35 +136,67 @@ public sealed class KeyboardRenderer2D : IKeyboardRenderer
         key.Height * scale);
 
     private static double CalculateScale(Size size, KeyboardLayoutDefinition layout) =>
-        Math.Max(1, Math.Min(size.Width / layout.WidthUnits, size.Height / layout.HeightUnits));
+        Math.Max(1, Math.Min(
+            Math.Max(1, size.Width - CanvasPadding * 2) / layout.WidthUnits,
+            Math.Max(1, size.Height - CanvasPadding * 2) / layout.HeightUnits));
 
     private static Vector CalculateOffset(Size size, KeyboardLayoutDefinition layout, double scale) => new(
         Math.Max(0, (size.Width - layout.WidthUnits * scale) / 2),
         Math.Max(0, (size.Height - layout.HeightUnits * scale) / 2));
 
-    private static SolidColorBrush HeatBrush(long count, long maximum)
+    private static void DrawKeyboardDeck(
+        DrawingContext context,
+        KeyboardLayoutDefinition layout,
+        Vector offset,
+        double scale,
+        Color accentColor)
     {
-        if (count <= 0)
-        {
-            return new SolidColorBrush(Color.FromRgb(30, 41, 59));
-        }
+        var deck = new Rect(
+            offset.X - 7,
+            offset.Y - 7,
+            layout.WidthUnits * scale + 14,
+            layout.HeightUnits * scale + 14);
+        var ambientShadow = deck;
+        ambientShadow.Inflate(5, 5);
+        ambientShadow.Offset(0, 4);
+        context.DrawRoundedRectangle(
+            new SolidColorBrush(Color.FromArgb(22, accentColor.R, accentColor.G, accentColor.B)),
+            null,
+            ambientShadow,
+            18,
+            18);
 
-        var intensity = Math.Log(1 + count) / Math.Log(1 + maximum);
-        return intensity switch
-        {
-            < 0.45 => Blend(Color.FromRgb(30, 64, 175), Color.FromRgb(14, 165, 233), intensity / 0.45),
-            < 0.75 => Blend(Color.FromRgb(14, 165, 233), Color.FromRgb(250, 204, 21), (intensity - 0.45) / 0.30),
-            _ => Blend(Color.FromRgb(250, 204, 21), Color.FromRgb(249, 115, 22), (intensity - 0.75) / 0.25),
-        };
+        var contactShadow = deck;
+        contactShadow.Offset(0, 3);
+        context.DrawRoundedRectangle(new SolidColorBrush(Color.FromArgb(28, 29, 27, 32)), null, contactShadow, 15, 15);
+        context.DrawRoundedRectangle(
+            new SolidColorBrush(Color.FromRgb(255, 252, 246)),
+            new Pen(new SolidColorBrush(Color.FromRgb(220, 209, 193)), 1),
+            deck,
+            15,
+            15);
     }
 
-    private static SolidColorBrush Blend(Color start, Color end, double amount)
+    private static double RelativeLuminance(Color color)
+    {
+        static double Channel(byte value)
+        {
+            var normalized = value / 255d;
+            return normalized <= 0.04045
+                ? normalized / 12.92
+                : Math.Pow((normalized + 0.055) / 1.055, 2.4);
+        }
+
+        return Channel(color.R) * 0.2126 + Channel(color.G) * 0.7152 + Channel(color.B) * 0.0722;
+    }
+
+    private static Color Blend(Color start, Color end, double amount)
     {
         amount = Math.Clamp(amount, 0, 1);
-        return new SolidColorBrush(Color.FromRgb(
+        return Color.FromRgb(
             (byte)(start.R + (end.R - start.R) * amount),
             (byte)(start.G + (end.G - start.G) * amount),
-            (byte)(start.B + (end.B - start.B) * amount)));
+            (byte)(start.B + (end.B - start.B) * amount));
     }
 }
 
@@ -140,11 +210,16 @@ public sealed class KeyboardRenderer25D : IKeyboardRenderer
         KeyboardLayoutDefinition layout,
         IReadOnlyDictionary<InputId, long> counts,
         InputId? selected,
+        HeatmapThresholds thresholds,
+        HeatmapThresholdMode thresholdMode,
+        IReadOnlyDictionary<InputId, double> animationProgress,
+        Color accentColor,
+        FontFamily fontFamily,
         double pixelsPerDip)
     {
         context.PushTransform(new SkewTransform(-2.2, 0, size.Width / 2, size.Height / 2));
         context.PushTransform(new TranslateTransform(0, -2));
-        _baseline.Render(context, size, layout, counts, selected, pixelsPerDip);
+        _baseline.Render(context, size, layout, counts, selected, thresholds, thresholdMode, animationProgress, accentColor, fontFamily, pixelsPerDip);
         context.Pop();
         context.Pop();
     }

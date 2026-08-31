@@ -28,7 +28,7 @@ public static class MetricsCalculator
         }
 
         var activityUnits = SaturatingAdd(
-            SaturatingMultiply(SaturatingAdd(keyboard, mouse), 5),
+            SaturatingMultiply(SaturatingAdd(keyboard, mouse), 10),
             wheel);
         return new InputMetrics(keyboard, mouse, wheel, activityUnits);
     }
@@ -59,4 +59,3 @@ public static class MetricsCalculator
     private static long SaturatingMultiply(long value, long multiplier) =>
         value > long.MaxValue / multiplier ? long.MaxValue : value * multiplier;
 }
-

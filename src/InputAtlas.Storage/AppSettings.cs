@@ -1,5 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Diagnostics;
+using InputAtlas.Core;
 
 namespace InputAtlas.Storage;
 
@@ -25,7 +27,7 @@ public enum AnimationKind
 
 public sealed record AppSettings
 {
-    public int SchemaVersion { get; init; } = 1;
+    public int SchemaVersion { get; init; } = 5;
 
     public bool OnboardingCompleted { get; init; }
 
@@ -34,6 +36,18 @@ public sealed record AppSettings
     public ThemeKind Theme { get; init; } = ThemeKind.System;
 
     public string HeatmapPalette { get; init; } = "ColorVisionSafe";
+
+    public long HeatmapCoolThreshold { get; init; } = 100;
+
+    public long HeatmapWarmThreshold { get; init; } = 500;
+
+    public long HeatmapHotThreshold { get; init; } = 2000;
+
+    public HeatmapThresholdMode HeatmapThresholdMode { get; init; } = HeatmapThresholdMode.FixedCount;
+
+    public string AccentColor { get; init; } = "#F3D48D";
+
+    public string FontFamily { get; init; } = "Segoe UI Variable Text";
 
     public AnimationKind Animation { get; init; } = AnimationKind.Full;
 
@@ -75,8 +89,61 @@ public sealed class AppSettingsStore(string settingsPath)
             FileShare.Read,
             4096,
             FileOptions.Asynchronous | FileOptions.SequentialScan);
-        return await JsonSerializer.DeserializeAsync<AppSettings>(stream, JsonOptions, cancellationToken)
+        var settings = await JsonSerializer.DeserializeAsync<AppSettings>(stream, JsonOptions, cancellationToken)
             .ConfigureAwait(false) ?? new AppSettings();
+        var sourceSchemaVersion = settings.SchemaVersion;
+        if (sourceSchemaVersion < 2 &&
+            settings.HeatmapCoolThreshold == 500 &&
+            settings.HeatmapWarmThreshold == 2500 &&
+            settings.HeatmapHotThreshold == 6000)
+        {
+            Debug.WriteLine("event=settings_threshold_defaults_migrated schema_from=1 schema_to=2 cool=100 warm=500 hot=2000");
+            settings = settings with
+            {
+                HeatmapCoolThreshold = 100,
+                HeatmapWarmThreshold = 500,
+                HeatmapHotThreshold = 2000,
+            };
+        }
+        if (sourceSchemaVersion < 3 &&
+            string.Equals(settings.AccentColor, "#635BFF", StringComparison.OrdinalIgnoreCase))
+        {
+            Debug.WriteLine("event=settings_accent_default_migrated schema_to=4 accent=#6F9F9D");
+            settings = settings with { AccentColor = "#6F9F9D" };
+        }
+        if (sourceSchemaVersion < 4 &&
+            string.Equals(settings.AccentColor, "#7FA2A2", StringComparison.OrdinalIgnoreCase))
+        {
+            Debug.WriteLine("event=settings_accent_saturation_migrated schema_to=4 accent=#6F9F9D");
+            settings = settings with { AccentColor = "#6F9F9D" };
+        }
+        if (sourceSchemaVersion < 5 &&
+            string.Equals(settings.AccentColor, "#6F9F9D", StringComparison.OrdinalIgnoreCase))
+        {
+            Debug.WriteLine("event=settings_accent_default_migrated schema_to=5 accent=#F3D48D");
+            settings = settings with { AccentColor = "#F3D48D" };
+        }
+
+        settings = settings with
+        {
+            SchemaVersion = 5,
+            FontFamily = string.IsNullOrWhiteSpace(settings.FontFamily)
+                ? "Segoe UI Variable Text"
+                : settings.FontFamily.Trim(),
+        };
+
+        if (HasValidHeatmapThresholds(settings))
+        {
+            return settings;
+        }
+
+        Debug.WriteLine($"event=settings_thresholds_invalid cool={settings.HeatmapCoolThreshold} warm={settings.HeatmapWarmThreshold} hot={settings.HeatmapHotThreshold} fallback=default");
+        return settings with
+        {
+            HeatmapCoolThreshold = 100,
+            HeatmapWarmThreshold = 500,
+            HeatmapHotThreshold = 2000,
+        };
     }
 
     public async ValueTask SaveAsync(AppSettings settings, CancellationToken cancellationToken = default)
@@ -98,5 +165,9 @@ public sealed class AppSettingsStore(string settingsPath)
 
         File.Move(temporary, _settingsPath, true);
     }
-}
 
+    private static bool HasValidHeatmapThresholds(AppSettings settings) =>
+        settings.HeatmapCoolThreshold > 0 &&
+        settings.HeatmapCoolThreshold < settings.HeatmapWarmThreshold &&
+        settings.HeatmapWarmThreshold < settings.HeatmapHotThreshold;
+}

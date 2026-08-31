@@ -8,8 +8,10 @@
     <RootNamespace>InputAtlas.App</RootNamespace>
     <AssemblyName>InputAtlas</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\inputatlas-esc-icon.ico</ApplicationIcon>
+    <StartupObject>InputAtlas.App.Program</StartupObject>
     <PublishSingleFile>false</PublishSingleFile>
-    <SelfContained>false</SelfContained>
+    <SelfContained>true</SelfContained>
     <PublishReadyToRun>false</PublishReadyToRun>
     <DebugType>embedded</DebugType>
   </PropertyGroup>
@@ -21,6 +23,8 @@
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Layouts\*.json" />
+    <Resource Include="Assets\inputatlas-esc-icon.ico" />
+    <Resource Include="Assets\inputatlas-esc-icon.png" />
     <Content Include="..\..\LICENSES\THIRD-PARTY-NOTICES.md" Link="Licenses\THIRD-PARTY-NOTICES.md">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>

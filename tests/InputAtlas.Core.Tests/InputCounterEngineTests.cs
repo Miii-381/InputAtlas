@@ -65,6 +65,34 @@ public sealed class InputCounterEngineTests
     }
 
     [Fact]
+    public void WheelNotchPublishesVisualPulse()
+    {
+        var engine = new InputCounterEngine(Now);
+        var transitions = new List<(InputId Input, bool IsPressed)>();
+        engine.StateChanged += (input, isPressed) => transitions.Add((input, isPressed));
+
+        engine.HandleMouse(new RawMouseSample(RawMouseButtons.VerticalWheel, 120), Now);
+
+        Assert.Equal(
+            [(InputId.WheelUp, true), (InputId.WheelUp, false)],
+            transitions);
+    }
+
+    [Fact]
+    public void SideButtonsUseForwardThenBackMapping()
+    {
+        var engine = new InputCounterEngine(Now);
+
+        engine.HandleMouse(new RawMouseSample(RawMouseButtons.Button4Down, 0), Now);
+        engine.HandleMouse(new RawMouseSample(RawMouseButtons.Button4Up, 0), Now);
+        engine.HandleMouse(new RawMouseSample(RawMouseButtons.Button5Down, 0), Now);
+
+        var counts = engine.Snapshot(Now).Counts;
+        Assert.Equal(1, counts[InputId.MouseForward]);
+        Assert.Equal(1, counts[InputId.MouseBack]);
+    }
+
+    [Fact]
     public void MouseDownRequiresReleaseBeforeSecondCount()
     {
         var engine = new InputCounterEngine(Now);
@@ -87,5 +115,44 @@ public sealed class InputCounterEngineTests
 
         Assert.Equal(2, engine.Snapshot(Now).Counts[new InputId(0x04)]);
     }
-}
 
+    [Fact]
+    public void KeyboardStateChangesOnlyOnPhysicalTransitions()
+    {
+        var engine = new InputCounterEngine(Now);
+        var transitions = new List<(InputId Input, bool IsPressed)>();
+        engine.StateChanged += (input, isPressed) => transitions.Add((input, isPressed));
+        var down = new RawKeyboardSample(0x1E, 0x41, false, false, false);
+        var up = down with { IsBreak = true };
+
+        engine.HandleKeyboard(down, Now);
+        engine.HandleKeyboard(down, Now);
+        engine.HandleKeyboard(up, Now);
+        engine.HandleKeyboard(up, Now);
+
+        Assert.Equal(
+            [(new InputId(0x04), true), (new InputId(0x04), false)],
+            transitions);
+    }
+
+    [Fact]
+    public void ResetPressedStatesPublishesReleaseForActiveInputs()
+    {
+        var engine = new InputCounterEngine(Now);
+        var releases = new List<InputId>();
+        engine.StateChanged += (input, isPressed) =>
+        {
+            if (!isPressed)
+            {
+                releases.Add(input);
+            }
+        };
+
+        engine.HandleKeyboard(new RawKeyboardSample(0x1E, 0x41, false, false, false), Now);
+        engine.HandleMouse(new RawMouseSample(RawMouseButtons.LeftDown, 0), Now);
+        engine.ResetPressedStates();
+
+        Assert.Contains(new InputId(0x04), releases);
+        Assert.Contains(InputId.MouseLeft, releases);
+    }
+}

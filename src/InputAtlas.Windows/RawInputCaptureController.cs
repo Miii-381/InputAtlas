@@ -42,12 +42,15 @@ public sealed class RawInputCaptureController : IInputCaptureController
         TimeProvider = timeProvider ?? TimeProvider.System;
         _engine = new InputCounterEngine(TimeProvider.GetUtcNow().ToUnixTimeSeconds());
         _engine.Counted += input => InputCounted?.Invoke(input);
+        _engine.StateChanged += (input, isPressed) => InputStateChanged?.Invoke(input, isPressed);
         _engine.BucketCompleted += snapshot => BucketCompleted?.Invoke(snapshot);
     }
 
     public event EventHandler<CaptureStatus>? StatusChanged;
 
     public event Action<InputId>? InputCounted;
+
+    public event Action<InputId, bool>? InputStateChanged;
 
     public event Action<BucketSnapshot>? BucketCompleted;
 

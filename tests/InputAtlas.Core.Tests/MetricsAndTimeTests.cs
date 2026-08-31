@@ -12,7 +12,7 @@ public sealed class MetricsAndTimeTests
 
         Assert.False(MetricsCalculator.Calculate([exactly]).IsActiveDay);
         Assert.True(MetricsCalculator.Calculate([above]).IsActiveDay);
-        Assert.Equal(1000.2m, MetricsCalculator.Calculate([above]).ActivityScore);
+        Assert.Equal(1000.1m, MetricsCalculator.Calculate([above]).ActivityScore);
     }
 
     [Theory]
@@ -42,6 +42,6 @@ public sealed class MetricsAndTimeTests
         Assert.Equal(10, metrics.KeyboardCount);
         Assert.Equal(20, metrics.MouseButtonCount);
         Assert.Equal(30, metrics.WheelSteps);
+        Assert.Equal(33m, metrics.ActivityScore);
     }
 }
-

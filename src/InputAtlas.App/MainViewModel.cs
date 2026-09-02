@@ -645,7 +645,7 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
         await _settingsStore.SaveAsync(_settings);
         _log.Information(
             "settings_autostart_changed",
-            $"enabled={enabled} registry_enabled={StartupRegistration.IsEnabled()} launch_mode=foreground");
+            $"enabled={enabled} registry_enabled={StartupRegistration.IsEnabled()} launch_mode=background");
     }
 
     public async Task ApplyHeatmapThresholdsAsync()

@@ -28,7 +28,7 @@ public partial class App : Application, IAsyncDisposable
         base.OnStartup(e);
         try
         {
-            var legacyStartupArgument = e.Args.Contains("--startup", StringComparer.OrdinalIgnoreCase);
+            var startedByWindows = e.Args.Contains("--startup", StringComparer.OrdinalIgnoreCase);
             var startupCommand = e.Args.Contains("--shutdown-for-update", StringComparer.OrdinalIgnoreCase)
                 ? "shutdown-for-update"
                 : "activate";
@@ -55,7 +55,7 @@ public partial class App : Application, IAsyncDisposable
             _log = new AsyncRollingLog(logRoot);
             _log.Information(
                 "application_start",
-                $"version={GetVersion()} architecture={RuntimeInformation.ProcessArchitecture} runtime={Environment.Version} per_monitor_v2={Program.PerMonitorV2Enabled} legacy_startup_argument={legacyStartupArgument}");
+                $"version={GetVersion()} architecture={RuntimeInformation.ProcessArchitecture} runtime={Environment.Version} per_monitor_v2={Program.PerMonitorV2Enabled} windows_startup={startedByWindows}");
             StartSingleInstanceCommandServer();
 
             _settingsStore = new AppSettingsStore(Path.Combine(dataRoot, "config.json"));
@@ -100,7 +100,7 @@ public partial class App : Application, IAsyncDisposable
             var autostartRegistered = StartupRegistration.IsEnabled();
             _log.Information(
                 "autostart_registration_synchronized",
-                $"configured={_settings.StartWithWindows} registry_enabled={autostartRegistered} launch_mode=foreground");
+                $"configured={_settings.StartWithWindows} registry_enabled={autostartRegistered} launch_mode=background");
             if (await _repository.GetMetadataAsync("first_capture_utc") is null)
             {
                 await _repository.SetMetadataAsync(
@@ -124,10 +124,23 @@ public partial class App : Application, IAsyncDisposable
             viewModel.OperationCompleted += OperationCompleted;
             _window.HiddenToTray += MainWindowHiddenToTray;
             CreateTrayIcon(viewModel);
-            ShowMainWindow();
+            if (startedByWindows)
+            {
+                _window.Show();
+                _window.Hide();
+                ScheduleCaptureRegistrationRefresh("windows_startup_hidden");
+                _log.Information(
+                    "main_window_hidden_for_windows_startup",
+                    $"visible={_window.IsVisible} state={_window.WindowState}");
+            }
+            else
+            {
+                ShowMainWindow();
+            }
+
             _log.Information(
                 "main_window_presented",
-                $"legacy_startup_argument={legacyStartupArgument} visible={_window.IsVisible} active={_window.IsActive} state={_window.WindowState}");
+                $"windows_startup={startedByWindows} visible={_window.IsVisible} active={_window.IsActive} state={_window.WindowState}");
         }
         catch (Exception exception)
         {

@@ -19,8 +19,8 @@ pwsh ./build.ps1 check
 pwsh ./build.ps1 test
 pwsh ./build.ps1 benchmark
 pwsh ./build.ps1 ci
-pwsh ./build.ps1 package -Version 1.0.0
-pwsh ./build.ps1 release -Version 1.0.0
+pwsh ./build.ps1 package -Version 1.0.4
+pwsh ./build.ps1 release -Version 1.0.4
 ```
 
 运行数据位于 `InputAtlas.exe` 同级的 `Data` 目录。开发文档是冻结需求基线，具体隐私与统计语义见 `开发文档/开发文档.md`。

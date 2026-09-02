@@ -126,12 +126,11 @@ public partial class App : Application, IAsyncDisposable
             CreateTrayIcon(viewModel);
             if (startedByWindows)
             {
-                _window.Show();
-                _window.Hide();
-                ScheduleCaptureRegistrationRefresh("windows_startup_hidden");
+                ScheduleCaptureRegistrationRefresh("windows_startup_background");
                 _log.Information(
-                    "main_window_hidden_for_windows_startup",
-                    $"visible={_window.IsVisible} state={_window.WindowState}");
+                    "main_window_deferred_for_windows_startup",
+                    $"visible={_window.IsVisible} active={_window.IsActive} " +
+                    $"presentation_source_created={PresentationSource.FromVisual(_window) is not null} state={_window.WindowState}");
             }
             else
             {
@@ -139,7 +138,7 @@ public partial class App : Application, IAsyncDisposable
             }
 
             _log.Information(
-                "main_window_presented",
+                "application_ui_ready",
                 $"windows_startup={startedByWindows} visible={_window.IsVisible} active={_window.IsActive} state={_window.WindowState}");
         }
         catch (Exception exception)

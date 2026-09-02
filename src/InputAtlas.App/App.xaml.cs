@@ -28,6 +28,7 @@ public partial class App : Application, IAsyncDisposable
         base.OnStartup(e);
         try
         {
+            var legacyStartupArgument = e.Args.Contains("--startup", StringComparer.OrdinalIgnoreCase);
             var startupCommand = e.Args.Contains("--shutdown-for-update", StringComparer.OrdinalIgnoreCase)
                 ? "shutdown-for-update"
                 : "activate";
@@ -54,7 +55,7 @@ public partial class App : Application, IAsyncDisposable
             _log = new AsyncRollingLog(logRoot);
             _log.Information(
                 "application_start",
-                $"version={GetVersion()} architecture={RuntimeInformation.ProcessArchitecture} runtime={Environment.Version} per_monitor_v2={Program.PerMonitorV2Enabled}");
+                $"version={GetVersion()} architecture={RuntimeInformation.ProcessArchitecture} runtime={Environment.Version} per_monitor_v2={Program.PerMonitorV2Enabled} legacy_startup_argument={legacyStartupArgument}");
             StartSingleInstanceCommandServer();
 
             _settingsStore = new AppSettingsStore(Path.Combine(dataRoot, "config.json"));
@@ -96,6 +97,10 @@ public partial class App : Application, IAsyncDisposable
             _capture = new RawInputCaptureController(_log);
             await _capture.StartAsync();
             StartupRegistration.SetEnabled(_settings.StartWithWindows, Environment.ProcessPath!);
+            var autostartRegistered = StartupRegistration.IsEnabled();
+            _log.Information(
+                "autostart_registration_synchronized",
+                $"configured={_settings.StartWithWindows} registry_enabled={autostartRegistered} launch_mode=foreground");
             if (await _repository.GetMetadataAsync("first_capture_utc") is null)
             {
                 await _repository.SetMetadataAsync(
@@ -117,13 +122,12 @@ public partial class App : Application, IAsyncDisposable
             _window = new MainWindow(viewModel, _settings);
             MainWindow = _window;
             viewModel.OperationCompleted += OperationCompleted;
-            _window.Show();
+            _window.HiddenToTray += MainWindowHiddenToTray;
             CreateTrayIcon(viewModel);
-
-            if (e.Args.Contains("--startup", StringComparer.OrdinalIgnoreCase))
-            {
-                _window.Hide();
-            }
+            ShowMainWindow();
+            _log.Information(
+                "main_window_presented",
+                $"legacy_startup_argument={legacyStartupArgument} visible={_window.IsVisible} active={_window.IsActive} state={_window.WindowState}");
         }
         catch (Exception exception)
         {
@@ -141,9 +145,12 @@ public partial class App : Application, IAsyncDisposable
     {
         if (_window is null)
         {
+            _log?.Warning("main_window_show_skipped", "reason=window_not_initialized");
             return;
         }
 
+        var wasVisible = _window.IsVisible;
+        var previousState = _window.WindowState;
         _window.Show();
         if (_window.WindowState == WindowState.Minimized)
         {
@@ -154,6 +161,10 @@ public partial class App : Application, IAsyncDisposable
         _window.Topmost = true;
         _window.Topmost = false;
         _window.Focus();
+        _log?.Information(
+            "main_window_shown",
+            $"was_visible={wasVisible} previous_state={previousState} active={_window.IsActive}");
+        ScheduleCaptureRegistrationRefresh("main_window_shown");
     }
 
     public async Task ShutdownApplicationAsync()
@@ -175,6 +186,7 @@ public partial class App : Application, IAsyncDisposable
 
             if (_window is not null)
             {
+                _window.HiddenToTray -= MainWindowHiddenToTray;
                 _window.AllowClose();
             }
 
@@ -246,6 +258,41 @@ public partial class App : Application, IAsyncDisposable
     {
         _log?.Information("windows_notification_requested", $"title={title} message={message}");
         _tray?.ShowBalloonTip(3500, title, message, Forms.ToolTipIcon.Info);
+    }
+
+    private void MainWindowHiddenToTray(object? sender, EventArgs e) =>
+        ScheduleCaptureRegistrationRefresh("main_window_hidden_to_tray");
+
+    private void ScheduleCaptureRegistrationRefresh(string reason)
+    {
+        if (_capture is null || _shutdownStarted)
+        {
+            return;
+        }
+
+        Dispatcher.BeginInvoke(
+            () => RefreshCaptureRegistrationAsync(reason),
+            System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+    }
+
+    private async void RefreshCaptureRegistrationAsync(string reason)
+    {
+        if (_capture is null || _shutdownStarted)
+        {
+            return;
+        }
+
+        try
+        {
+            await _capture.RefreshRegistrationAsync(reason);
+        }
+        catch (Exception exception)
+        {
+            _log?.LogError(
+                "capture_registration_refresh_request_failed",
+                $"Raw Input 注册刷新请求失败 reason={reason}",
+                exception);
+        }
     }
 
     private void StartSingleInstanceCommandServer()

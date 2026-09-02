@@ -643,7 +643,9 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
         StartupRegistration.SetEnabled(enabled, Environment.ProcessPath ?? throw new InvalidOperationException("无法确定程序路径。"));
         _settings = _settings with { StartWithWindows = enabled };
         await _settingsStore.SaveAsync(_settings);
-        _log.Information("settings_autostart_changed", $"enabled={enabled}");
+        _log.Information(
+            "settings_autostart_changed",
+            $"enabled={enabled} registry_enabled={StartupRegistration.IsEnabled()} launch_mode=foreground");
     }
 
     public async Task ApplyHeatmapThresholdsAsync()

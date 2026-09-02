@@ -27,6 +27,8 @@ public partial class MainWindow : Window
     private bool _navigationDockManuallyCollapsed;
     private bool _trayNoticeShown;
 
+    public event EventHandler? HiddenToTray;
+
     public MainWindow(MainViewModel viewModel, AppSettings settings)
     {
         _viewModel = viewModel;
@@ -78,6 +80,7 @@ public partial class MainWindow : Window
 
         e.Cancel = true;
         Hide();
+        HiddenToTray?.Invoke(this, EventArgs.Empty);
         if (!_trayNoticeShown)
         {
             _trayNoticeShown = true;

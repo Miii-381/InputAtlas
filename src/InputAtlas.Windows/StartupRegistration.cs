@@ -19,12 +19,17 @@ public static class StartupRegistration
         using var key = Registry.CurrentUser.CreateSubKey(RunKey, true);
         if (enabled)
         {
-            key.SetValue(ValueName, $"\"{Path.GetFullPath(executablePath)}\" --startup", RegistryValueKind.String);
+            key.SetValue(ValueName, BuildLaunchCommand(executablePath), RegistryValueKind.String);
         }
         else
         {
             key.DeleteValue(ValueName, false);
         }
     }
-}
 
+    internal static string BuildLaunchCommand(string executablePath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(executablePath);
+        return $"\"{Path.GetFullPath(executablePath)}\"";
+    }
+}

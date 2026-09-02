@@ -18,21 +18,28 @@ public sealed class RawInputCaptureController : IInputCaptureController
     private const uint WmAppPause = 0x8001;
     private const uint WmAppResume = 0x8002;
     private const uint WmAppStop = 0x8003;
+    private const uint WmAppRefreshRegistration = 0x8004;
     private const int PbtApmSuspend = 0x0004;
     private const int PbtApmResumeAutomatic = 0x0012;
     private const int WtsSessionLock = 0x7;
     private const int WtsSessionUnlock = 0x8;
     private static readonly ConcurrentDictionary<nint, RawInputCaptureController> Windows = new();
     private static readonly WndProcDelegate WindowProcedure = StaticWindowProcedure;
+    private static long _windowClassSequence;
     private readonly IApplicationLog _log;
     private readonly InputCounterEngine _engine;
     private readonly object _lifecycleSync = new();
+    private readonly SemaphoreSlim _registrationRefreshGate = new(1, 1);
     private Thread? _thread;
     private TaskCompletionSource? _started;
+    private TaskCompletionSource? _registrationRefreshCompletion;
+    private string? _registrationRefreshReason;
     private nint _window;
     private uint _threadId;
     private bool _sessionAvailable = true;
     private bool _manuallyPaused;
+    private bool _keyboardInputObserved;
+    private bool _mouseInputObserved;
     private CaptureStatus _status = CaptureStatus.Stopped;
     private bool _disposed;
 
@@ -57,6 +64,8 @@ public sealed class RawInputCaptureController : IInputCaptureController
     public CaptureStatus Status => _status;
 
     public bool IsCoverageActive => _status == CaptureStatus.Recording && _sessionAvailable && !_manuallyPaused;
+
+    internal nint MessageWindowHandle => _window;
 
     private TimeProvider TimeProvider { get; }
 
@@ -103,6 +112,38 @@ public sealed class RawInputCaptureController : IInputCaptureController
         }
 
         return ValueTask.CompletedTask;
+    }
+
+    public async ValueTask RefreshRegistrationAsync(
+        string reason,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(reason);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        await _registrationRefreshGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            if (_threadId == 0 || _window == 0)
+            {
+                throw new InvalidOperationException("Raw Input 消息窗口尚未就绪。");
+            }
+
+            var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            _registrationRefreshReason = reason;
+            _registrationRefreshCompletion = completion;
+            if (!PostThreadMessage(_threadId, WmAppRefreshRegistration, 0, 0))
+            {
+                throw new Win32Exception(Marshal.GetLastWin32Error(), "无法请求刷新 Raw Input 注册。");
+            }
+
+            await completion.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            _registrationRefreshReason = null;
+            _registrationRefreshCompletion = null;
+            _registrationRefreshGate.Release();
+        }
     }
 
     public async ValueTask StopAsync(CancellationToken cancellationToken = default)
@@ -158,7 +199,8 @@ public sealed class RawInputCaptureController : IInputCaptureController
         try
         {
             _threadId = GetCurrentThreadId();
-            var className = $"InputAtlas.RawInput.{Environment.ProcessId}";
+            var className =
+                $"InputAtlas.RawInput.{Environment.ProcessId}.{Interlocked.Increment(ref _windowClassSequence)}";
             RegisterWindowClass(className);
             _window = CreateWindowEx(
                 0,
@@ -185,10 +227,12 @@ public sealed class RawInputCaptureController : IInputCaptureController
                 _log.Warning("capture_session_notifications", $"会话通知注册失败 error={Marshal.GetLastWin32Error()}");
             }
 
-            RegisterDevices();
+            RegisterDevices("initial_start");
             _engine.ResetPressedStates();
             SetStatus(CaptureStatus.Recording);
-            _log.Information("capture_started", "Raw Input 专用线程已开始记录");
+            _log.Information(
+                "capture_started",
+                $"Raw Input 专用线程已开始记录 thread_id={_threadId} window=0x{_window:X}");
             _started?.TrySetResult();
 
             while (GetMessage(out var message, 0, 0, 0) > 0)
@@ -208,6 +252,12 @@ public sealed class RawInputCaptureController : IInputCaptureController
                 if (message.Id == WmAppStop)
                 {
                     break;
+                }
+
+                if (message.Id == WmAppRefreshRegistration)
+                {
+                    RefreshRegistrationOnInputThread();
+                    continue;
                 }
 
                 TranslateMessage(in message);
@@ -244,7 +294,7 @@ public sealed class RawInputCaptureController : IInputCaptureController
         }
     }
 
-    private unsafe void RegisterDevices()
+    private unsafe void RegisterDevices(string reason)
     {
         var devices = stackalloc RawInputDevice[2];
         devices[0] = new RawInputDevice { UsagePage = 0x01, Usage = 0x06, Flags = RidevInputSink, Target = _window };
@@ -253,6 +303,17 @@ public sealed class RawInputCaptureController : IInputCaptureController
         {
             throw new Win32Exception(Marshal.GetLastWin32Error(), "Raw Input 设备注册失败。");
         }
+
+        var state = GetRegistrationState();
+        if (!state.KeyboardOwned || !state.MouseOwned)
+        {
+            throw new InvalidOperationException(
+                $"Raw Input 注册目标校验失败：keyboard_owned={state.KeyboardOwned} mouse_owned={state.MouseOwned}。");
+        }
+
+        _log.Information(
+            "capture_devices_registered",
+            $"reason={reason} keyboard=true mouse=true input_sink=true target=0x{_window:X}");
     }
 
     private unsafe void RemoveDevices()
@@ -286,7 +347,7 @@ public sealed class RawInputCaptureController : IInputCaptureController
 
         try
         {
-            RegisterDevices();
+            RegisterDevices("manual_resume");
             _engine.ResetPressedStates();
             _manuallyPaused = false;
             SetStatus(CaptureStatus.Recording);
@@ -297,6 +358,98 @@ public sealed class RawInputCaptureController : IInputCaptureController
             SetStatus(CaptureStatus.Unavailable);
             _log.LogError("capture_resume_failed", "恢复 Raw Input 注册失败", exception);
         }
+    }
+
+    private void RefreshRegistrationOnInputThread()
+    {
+        var completion = _registrationRefreshCompletion;
+        var reason = _registrationRefreshReason ?? "unspecified";
+        var exception = TryRefreshRegistrationOnInputThread(reason);
+        if (exception is null)
+        {
+            completion?.TrySetResult();
+        }
+        else
+        {
+            completion?.TrySetException(exception);
+        }
+    }
+
+    private Exception? TryRefreshRegistrationOnInputThread(string reason)
+    {
+        if (_manuallyPaused)
+        {
+            _log.Information("capture_registration_refresh_skipped", $"reason={reason} capture_paused=true");
+            return null;
+        }
+
+        try
+        {
+            var before = GetRegistrationState();
+            RegisterDevices(reason);
+            _engine.ResetPressedStates();
+            if (_status == CaptureStatus.Unavailable)
+            {
+                SetStatus(CaptureStatus.Recording);
+            }
+
+            _log.Information(
+                "capture_registration_refreshed",
+                $"reason={reason} before_keyboard_owned={before.KeyboardOwned} before_mouse_owned={before.MouseOwned} target=0x{_window:X}");
+            return null;
+        }
+        catch (Exception exception)
+        {
+            SetStatus(CaptureStatus.Unavailable);
+            _log.LogError(
+                "capture_registration_refresh_failed",
+                $"刷新 Raw Input 注册失败 reason={reason}",
+                exception);
+            return exception;
+        }
+    }
+
+    internal bool HasExpectedRegistration()
+    {
+        if (_window == 0)
+        {
+            return false;
+        }
+
+        var state = GetRegistrationState();
+        return state.KeyboardOwned && state.MouseOwned;
+    }
+
+    private unsafe RegistrationState GetRegistrationState()
+    {
+        const int maximumRegistrations = 64;
+        var devices = stackalloc RawInputDevice[maximumRegistrations];
+        uint count = maximumRegistrations;
+        var result = GetRegisteredRawInputDevices(devices, ref count, (uint)sizeof(RawInputDevice));
+        if (result == uint.MaxValue)
+        {
+            throw new Win32Exception(Marshal.GetLastWin32Error(), "无法读取当前 Raw Input 注册目标。");
+        }
+
+        var keyboardOwned = false;
+        var mouseOwned = false;
+        for (var index = 0; index < result; index++)
+        {
+            var device = devices[index];
+            var ownedByCaptureWindow =
+                device.Target == _window &&
+                (device.Flags & RidevInputSink) == RidevInputSink;
+            if (device.UsagePage == 0x01 && device.Usage == 0x06)
+            {
+                keyboardOwned = ownedByCaptureWindow;
+            }
+            else if (device.UsagePage == 0x01 && device.Usage == 0x02)
+            {
+                mouseOwned = ownedByCaptureWindow;
+            }
+        }
+
+        return new RegistrationState(keyboardOwned, mouseOwned);
     }
 
     private nint WindowProcedureInstance(uint message, nuint wParam, nint lParam)
@@ -322,6 +475,7 @@ public sealed class RawInputCaptureController : IInputCaptureController
                     _sessionAvailable = true;
                     _engine.ResetPressedStates();
                     _log.Information("power_resume", "系统已从睡眠或休眠恢复");
+                    TryRefreshRegistrationOnInputThread("power_resume");
                 }
 
                 break;
@@ -337,6 +491,7 @@ public sealed class RawInputCaptureController : IInputCaptureController
                     _sessionAvailable = true;
                     _engine.ResetPressedStates();
                     _log.Information("session_unlocked", "当前用户会话已解锁");
+                    TryRefreshRegistrationOnInputThread("session_unlock");
                 }
 
                 break;
@@ -364,6 +519,12 @@ public sealed class RawInputCaptureController : IInputCaptureController
         var now = TimeProvider.GetUtcNow().ToUnixTimeSeconds();
         if (header->Type == RimhKeyboard)
         {
+            if (!_keyboardInputObserved)
+            {
+                _keyboardInputObserved = true;
+                _log.Information("capture_first_keyboard_input", "已收到首个键盘 Raw Input 事件");
+            }
+
             var keyboard = (RawKeyboard*)(buffer + sizeof(RawInputHeader));
             var flags = keyboard->Flags;
             var sample = new RawKeyboardSample(
@@ -376,6 +537,12 @@ public sealed class RawInputCaptureController : IInputCaptureController
         }
         else if (header->Type == RimhMouse)
         {
+            if (!_mouseInputObserved)
+            {
+                _mouseInputObserved = true;
+                _log.Information("capture_first_mouse_input", "已收到首个鼠标 Raw Input 事件");
+            }
+
             var mouse = (RawMouse*)(buffer + sizeof(RawInputHeader));
             if (mouse->ButtonFlags == 0)
             {
@@ -469,6 +636,8 @@ public sealed class RawInputCaptureController : IInputCaptureController
         public nuint WParam;
     }
 
+    private readonly record struct RegistrationState(bool KeyboardOwned, bool MouseOwned);
+
     [StructLayout(LayoutKind.Sequential)]
     private struct RawKeyboard
     {
@@ -498,6 +667,12 @@ public sealed class RawInputCaptureController : IInputCaptureController
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern unsafe bool RegisterRawInputDevices(RawInputDevice* devices, uint deviceCount, uint size);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern unsafe uint GetRegisteredRawInputDevices(
+        RawInputDevice* devices,
+        ref uint deviceCount,
+        uint size);
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern unsafe uint GetRawInputData(nint rawInput, uint command, void* data, ref uint size, uint headerSize);

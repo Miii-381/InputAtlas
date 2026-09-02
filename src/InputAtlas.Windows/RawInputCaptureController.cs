@@ -40,6 +40,8 @@ public sealed class RawInputCaptureController : IInputCaptureController
     private bool _manuallyPaused;
     private bool _keyboardInputObserved;
     private bool _mouseInputObserved;
+    private int _registrationGeneration;
+    private string _registrationReason = "not_registered";
     private CaptureStatus _status = CaptureStatus.Stopped;
     private bool _disposed;
 
@@ -232,7 +234,8 @@ public sealed class RawInputCaptureController : IInputCaptureController
             SetStatus(CaptureStatus.Recording);
             _log.Information(
                 "capture_started",
-                $"Raw Input 专用线程已开始记录 thread_id={_threadId} window=0x{_window:X}");
+                $"Raw Input 专用线程已开始记录 thread_id={_threadId} window=0x{_window:X} " +
+                $"generation={_registrationGeneration} reason={_registrationReason}");
             _started?.TrySetResult();
 
             while (GetMessage(out var message, 0, 0, 0) > 0)
@@ -311,9 +314,13 @@ public sealed class RawInputCaptureController : IInputCaptureController
                 $"Raw Input 注册目标校验失败：keyboard_owned={state.KeyboardOwned} mouse_owned={state.MouseOwned}。");
         }
 
+        _registrationGeneration++;
+        _registrationReason = reason;
+        _keyboardInputObserved = false;
+        _mouseInputObserved = false;
         _log.Information(
             "capture_devices_registered",
-            $"reason={reason} keyboard=true mouse=true input_sink=true target=0x{_window:X}");
+            $"reason={reason} generation={_registrationGeneration} keyboard=true mouse=true input_sink=true target=0x{_window:X}");
     }
 
     private unsafe void RemoveDevices()
@@ -395,7 +402,8 @@ public sealed class RawInputCaptureController : IInputCaptureController
 
             _log.Information(
                 "capture_registration_refreshed",
-                $"reason={reason} before_keyboard_owned={before.KeyboardOwned} before_mouse_owned={before.MouseOwned} target=0x{_window:X}");
+                $"reason={reason} generation={_registrationGeneration} before_keyboard_owned={before.KeyboardOwned} " +
+                $"before_mouse_owned={before.MouseOwned} target=0x{_window:X}");
             return null;
         }
         catch (Exception exception)
@@ -522,7 +530,9 @@ public sealed class RawInputCaptureController : IInputCaptureController
             if (!_keyboardInputObserved)
             {
                 _keyboardInputObserved = true;
-                _log.Information("capture_first_keyboard_input", "已收到首个键盘 Raw Input 事件");
+                _log.Information(
+                    "capture_first_keyboard_input",
+                    $"已收到本次注册后的首个键盘 Raw Input 事件 generation={_registrationGeneration} reason={_registrationReason}");
             }
 
             var keyboard = (RawKeyboard*)(buffer + sizeof(RawInputHeader));
@@ -540,7 +550,9 @@ public sealed class RawInputCaptureController : IInputCaptureController
             if (!_mouseInputObserved)
             {
                 _mouseInputObserved = true;
-                _log.Information("capture_first_mouse_input", "已收到首个鼠标 Raw Input 事件");
+                _log.Information(
+                    "capture_first_mouse_input",
+                    $"已收到本次注册后的首个鼠标 Raw Input 事件 generation={_registrationGeneration} reason={_registrationReason}");
             }
 
             var mouse = (RawMouse*)(buffer + sizeof(RawInputHeader));

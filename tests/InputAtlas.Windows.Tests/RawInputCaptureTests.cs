@@ -10,14 +10,13 @@ public sealed class RawInputCaptureTests
     private const nuint WtsSessionUnlock = 0x8;
 
     [Fact]
-    public void WindowsStartupCommandLaunchesExecutableWithoutBackgroundArgument()
+    public void WindowsStartupCommandIncludesBackgroundStartupArgument()
     {
         var executablePath = Path.Combine("relative folder", "InputAtlas.exe");
 
         var command = StartupRegistration.BuildLaunchCommand(executablePath);
 
-        Assert.Equal($"\"{Path.GetFullPath(executablePath)}\"", command);
-        Assert.DoesNotContain("--startup", command, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal($"\"{Path.GetFullPath(executablePath)}\" --startup", command);
     }
 
     [Fact]

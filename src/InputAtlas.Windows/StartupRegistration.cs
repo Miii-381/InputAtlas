@@ -30,6 +30,6 @@ public static class StartupRegistration
     internal static string BuildLaunchCommand(string executablePath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(executablePath);
-        return $"\"{Path.GetFullPath(executablePath)}\"";
+        return $"\"{Path.GetFullPath(executablePath)}\" --startup";
     }
 }

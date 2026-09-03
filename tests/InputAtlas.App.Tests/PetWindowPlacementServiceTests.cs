@@ -16,6 +16,36 @@ public sealed class PetWindowPlacementServiceTests
     }
 
     [Fact]
+    public void RelativeAnchorKeepsCursorAtSameVisualPointAcrossDpiResize()
+    {
+        var anchor = PetWindowPlacementService.CaptureRelativeAnchor(
+            new Rect(2600, 300, 630, 504),
+            new Point(2915, 552));
+
+        var positionOnLowerDpiMonitor = PetWindowPlacementService.PositionFromRelativeAnchor(
+            new Point(1200, 600),
+            new Size(525, 420),
+            anchor);
+
+        Assert.Equal(new Point(0.5, 0.5), anchor);
+        Assert.Equal(new Point(937.5, 390), positionOnLowerDpiMonitor);
+    }
+
+    [Fact]
+    public void SnapUsesTargetMonitorPhysicalWindowSizeAtBottomRightEdge()
+    {
+        var result = PetWindowPlacementService.Snap(
+            new Rect(1920, 0, 2560, 1400),
+            new Size(630, 504),
+            new Point(3860, 910),
+            27);
+
+        Assert.True(result.Horizontal);
+        Assert.True(result.Vertical);
+        Assert.Equal(new Point(3850, 896), result.Position);
+    }
+
+    [Fact]
     public void ClampKeepsAtLeastMarginVisibleInsideWorkArea()
     {
         var workArea = new Rect(100, 50, 1200, 800);

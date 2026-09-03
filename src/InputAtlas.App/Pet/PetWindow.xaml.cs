@@ -33,8 +33,7 @@ public partial class PetWindow : Window
     private bool _dragMoveFailureLogged;
     private bool _snappedHorizontal;
     private bool _snappedVertical;
-    private NativePoint _dragStartCursor;
-    private MovingRect _dragStartWindow;
+    private Point _dragRelativeAnchor;
 
     public PetWindow(PetFrameSet frames, IApplicationLog log)
     {
@@ -43,9 +42,16 @@ public partial class PetWindow : Window
         InitializeComponent();
         SetFrame(PetVisualState.Idle);
         SourceInitialized += (_, _) => ApplyExtendedStyles();
-        DpiChanged += (_, _) =>
+        DpiChanged += (_, e) =>
         {
-            if (!_adjusting)
+            if (_adjusting && _dragging)
+            {
+                _log.Information(
+                    "pet_adjustment_dpi_changed",
+                    $"old_scale_x={e.OldDpi.DpiScaleX:F2} old_scale_y={e.OldDpi.DpiScaleY:F2} new_scale_x={e.NewDpi.DpiScaleX:F2} new_scale_y={e.NewDpi.DpiScaleY:F2} anchor_preserved=true");
+                Dispatcher.BeginInvoke(RefreshDragAfterDpiChanged);
+            }
+            else
             {
                 PlacementRefreshRequested?.Invoke(this, EventArgs.Empty);
             }
@@ -139,14 +145,22 @@ public partial class PetWindow : Window
 
         var handle = new WindowInteropHelper(this).Handle;
         if (handle == IntPtr.Zero ||
-            !GetCursorPos(out _dragStartCursor) ||
-            !GetWindowRect(handle, out _dragStartWindow))
+            !GetCursorPos(out var cursor) ||
+            !GetWindowRect(handle, out var windowBounds))
         {
             _log.Warning(
                 "pet_adjustment_drag_start_failed",
                 $"native_error={Marshal.GetLastWin32Error()}");
             return;
         }
+
+        _dragRelativeAnchor = PetWindowPlacementService.CaptureRelativeAnchor(
+            new Rect(
+                windowBounds.Left,
+                windowBounds.Top,
+                windowBounds.Right - windowBounds.Left,
+                windowBounds.Bottom - windowBounds.Top),
+            new Point(cursor.X, cursor.Y));
 
         _dragging = Mouse.Capture(PetSurface, CaptureMode.Element);
         if (!_dragging)
@@ -177,17 +191,55 @@ public partial class PetWindow : Window
             return;
         }
 
-        var width = _dragStartWindow.Right - _dragStartWindow.Left;
-        var height = _dragStartWindow.Bottom - _dragStartWindow.Top;
-        var requestedLeft = _dragStartWindow.Left + cursor.X - _dragStartCursor.X;
-        var requestedTop = _dragStartWindow.Top + cursor.Y - _dragStartCursor.Y;
+        MoveWindowToCursor(cursor);
+        e.Handled = true;
+    }
+
+    private void RefreshDragAfterDpiChanged()
+    {
+        if (!_adjusting || !_dragging)
+        {
+            return;
+        }
+
+        if (!GetCursorPos(out var cursor))
+        {
+            LogDragMoveFailureOnce("dpi_change_cursor_unavailable");
+            return;
+        }
+
+        MoveWindowToCursor(cursor);
+    }
+
+    private void MoveWindowToCursor(NativePoint cursor)
+    {
+        var handle = new WindowInteropHelper(this).Handle;
+        if (handle == IntPtr.Zero || !GetWindowRect(handle, out var windowBounds))
+        {
+            LogDragMoveFailureOnce("window_bounds_unavailable");
+            return;
+        }
+
+        var width = windowBounds.Right - windowBounds.Left;
+        var height = windowBounds.Bottom - windowBounds.Top;
+        if (width <= 0 || height <= 0)
+        {
+            LogDragMoveFailureOnce("window_bounds_invalid");
+            return;
+        }
+
+        var requested = PetWindowPlacementService.PositionFromRelativeAnchor(
+            new Point(cursor.X, cursor.Y),
+            new Size(width, height),
+            _dragRelativeAnchor);
+        var requestedLeft = checked((int)Math.Round(requested.X));
+        var requestedTop = checked((int)Math.Round(requested.Y));
         var screen = Forms.Screen.FromRectangle(new System.Drawing.Rectangle(
             requestedLeft,
             requestedTop,
             width,
             height));
         var workingArea = screen.WorkingArea;
-        var handle = new WindowInteropHelper(this).Handle;
         var dpi = GetDpiForWindow(handle);
         var dpiScale = dpi == 0 ? 1d : dpi / 96d;
         var result = PetWindowPlacementService.Snap(
@@ -212,8 +264,6 @@ public partial class PetWindow : Window
         {
             LogDragMoveFailureOnce("set_window_position_failed");
         }
-
-        e.Handled = true;
     }
 
     private void PetSurfaceMouseLeftButtonUp(object sender, MouseButtonEventArgs e)

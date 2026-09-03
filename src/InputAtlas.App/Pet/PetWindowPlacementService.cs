@@ -35,6 +35,32 @@ public static class PetWindowPlacementService
             workArea.Right - windowSize.Width - VisibleMargin,
             workArea.Bottom - windowSize.Height - VisibleMargin);
 
+    public static Point CaptureRelativeAnchor(Rect windowBounds, Point cursor)
+    {
+        if (windowBounds.Width <= 0 || windowBounds.Height <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(windowBounds), "Window bounds must have positive dimensions.");
+        }
+
+        return new Point(
+            Math.Clamp((cursor.X - windowBounds.Left) / windowBounds.Width, 0, 1),
+            Math.Clamp((cursor.Y - windowBounds.Top) / windowBounds.Height, 0, 1));
+    }
+
+    public static Point PositionFromRelativeAnchor(Point cursor, Size windowSize, Point relativeAnchor)
+    {
+        if (windowSize.Width <= 0 || windowSize.Height <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(windowSize), "Window size must have positive dimensions.");
+        }
+
+        var anchorX = Math.Clamp(relativeAnchor.X, 0, 1);
+        var anchorY = Math.Clamp(relativeAnchor.Y, 0, 1);
+        return new Point(
+            cursor.X - windowSize.Width * anchorX,
+            cursor.Y - windowSize.Height * anchorY);
+    }
+
     public static PetWindowPlacement Capture(PetWindow window)
     {
         var handle = new WindowInteropHelper(window).Handle;

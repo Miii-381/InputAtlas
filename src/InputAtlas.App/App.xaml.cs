@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Windows;
+using InputAtlas.App.Pet;
 using InputAtlas.Core;
 using InputAtlas.Storage;
 using InputAtlas.Windows;
@@ -19,8 +20,15 @@ public partial class App : Application, IAsyncDisposable
     private AppSettings? _settings;
     private MainViewModel? _viewModel;
     private MainWindow? _window;
+    private PetHost? _petHost;
     private Forms.NotifyIcon? _tray;
     private System.Drawing.Icon? _trayIcon;
+    private Forms.ToolStripMenuItem? _petVisibilityMenuItem;
+    private Forms.ToolStripMenuItem? _petAdjustmentMenuItem;
+    private Forms.ToolStripMenuItem? _petResetPlacementMenuItem;
+    private Forms.ToolStripMenuItem? _petScaleMenuItem;
+    private Forms.ToolStripMenuItem? _petClickThroughMenuItem;
+    private readonly Dictionary<double, Forms.ToolStripMenuItem> _petScaleMenuItems = [];
     private bool _shutdownStarted;
 
     protected override async void OnStartup(StartupEventArgs e)
@@ -122,7 +130,19 @@ public partial class App : Application, IAsyncDisposable
             _window = new MainWindow(viewModel, _settings);
             MainWindow = _window;
             viewModel.OperationCompleted += OperationCompleted;
+            viewModel.PetSettingsChanged += PetSettingsChanged;
             _window.HiddenToTray += MainWindowHiddenToTray;
+            _window.PetVisibilityToggleRequested += PetVisibilityToggleRequested;
+            _window.PetAdjustmentRequested += PetAdjustmentRequested;
+            _petHost = new PetHost(
+                _capture,
+                Dispatcher,
+                _settings,
+                _log,
+                placement => viewModel.UpdatePetPlacementAsync(
+                    placement.Left,
+                    placement.Top,
+                    placement.MonitorDeviceName));
             CreateTrayIcon(viewModel);
             if (startedByWindows)
             {
@@ -190,16 +210,26 @@ public partial class App : Application, IAsyncDisposable
         try
         {
             _log?.Information("application_shutdown", "应用开始受控退出");
-            if (_viewModel is not null)
+            if (_petHost is not null)
             {
-                _viewModel.OperationCompleted -= OperationCompleted;
-                _viewModel = null;
+                await _petHost.DisposeAsync();
+                _petHost = null;
             }
 
             if (_window is not null)
             {
                 _window.HiddenToTray -= MainWindowHiddenToTray;
+                _window.PetVisibilityToggleRequested -= PetVisibilityToggleRequested;
+                _window.PetAdjustmentRequested -= PetAdjustmentRequested;
                 _window.AllowClose();
+            }
+
+            if (_viewModel is not null)
+            {
+                _viewModel.OperationCompleted -= OperationCompleted;
+                _viewModel.PetSettingsChanged -= PetSettingsChanged;
+                await _viewModel.DisposeAsync();
+                _viewModel = null;
             }
 
             if (_coordinator is not null)
@@ -262,9 +292,89 @@ public partial class App : Application, IAsyncDisposable
         menu.Items.Add("打开", null, (_, _) => Dispatcher.Invoke(ShowMainWindow));
         menu.Items.Add("暂停/恢复", null, async (_, _) => await Dispatcher.InvokeAsync(viewModel.ToggleCaptureAsync));
         menu.Items.Add("立即保存", null, async (_, _) => await Dispatcher.InvokeAsync(async () => await viewModel.SaveNowAsync()));
+        menu.Items.Add(new Forms.ToolStripSeparator());
+        _petVisibilityMenuItem = new Forms.ToolStripMenuItem("显示 / 隐藏桌宠", null, (_, _) =>
+            Dispatcher.Invoke(() => _petHost?.ToggleVisibility()));
+        _petAdjustmentMenuItem = new Forms.ToolStripMenuItem("调整桌宠位置（拖动一次）", null, (_, _) =>
+            Dispatcher.Invoke(() => _petHost?.BeginAdjustment()));
+        _petResetPlacementMenuItem = new Forms.ToolStripMenuItem("重置桌宠位置", null, async (_, _) =>
+            await RunOnDispatcherAsync(viewModel.ResetPetPlacementAsync));
+        _petScaleMenuItem = new Forms.ToolStripMenuItem("桌宠显示比例");
+        _petScaleMenuItems.Clear();
+        foreach (var option in viewModel.PetScaleOptions)
+        {
+            var scale = option.Value;
+            var scaleItem = new Forms.ToolStripMenuItem(option.DisplayName);
+            scaleItem.Click += async (_, _) =>
+                await RunOnDispatcherAsync(() => viewModel.SetPetScaleAsync(scale));
+            _petScaleMenuItems.Add(scale, scaleItem);
+            _petScaleMenuItem.DropDownItems.Add(scaleItem);
+        }
+
+        _petClickThroughMenuItem = new Forms.ToolStripMenuItem("桌宠鼠标穿透", null, async (_, _) =>
+            await RunOnDispatcherAsync(() => viewModel.SetPetClickThroughAsync(!viewModel.PetClickThrough)));
+        menu.Items.Add(_petVisibilityMenuItem);
+        menu.Items.Add(_petAdjustmentMenuItem);
+        menu.Items.Add(_petResetPlacementMenuItem);
+        menu.Items.Add(_petScaleMenuItem);
+        menu.Items.Add(_petClickThroughMenuItem);
+        UpdatePetTrayItems(viewModel.Settings);
+        _log?.Information("pet_tray_controls_created", $"scale_option_count={_petScaleMenuItems.Count}");
+        menu.Items.Add(new Forms.ToolStripSeparator());
         menu.Items.Add("退出", null, async (_, _) => await Dispatcher.InvokeAsync(ShutdownApplicationAsync));
         _tray.ContextMenuStrip = menu;
     }
+
+    private void PetSettingsChanged(AppSettings settings)
+    {
+        _settings = settings;
+        _petHost?.ApplySettings(settings);
+        UpdatePetTrayItems(settings);
+    }
+
+    private void UpdatePetTrayItems(AppSettings settings)
+    {
+        if (_petVisibilityMenuItem is not null)
+        {
+            _petVisibilityMenuItem.Enabled = settings.PetEnabled;
+        }
+
+        if (_petAdjustmentMenuItem is not null)
+        {
+            _petAdjustmentMenuItem.Enabled = settings.PetEnabled;
+        }
+
+        if (_petResetPlacementMenuItem is not null)
+        {
+            _petResetPlacementMenuItem.Enabled = settings.PetEnabled;
+        }
+
+        if (_petScaleMenuItem is not null)
+        {
+            _petScaleMenuItem.Enabled = settings.PetEnabled;
+            _petScaleMenuItem.Text = $"桌宠显示比例（{settings.PetScale:P0}）";
+        }
+
+        foreach (var (scale, menuItem) in _petScaleMenuItems)
+        {
+            menuItem.Checked = Math.Abs(scale - settings.PetScale) < 0.001;
+        }
+
+        if (_petClickThroughMenuItem is not null)
+        {
+            _petClickThroughMenuItem.Enabled = settings.PetEnabled;
+            _petClickThroughMenuItem.Checked = settings.PetClickThrough;
+        }
+    }
+
+    private Task RunOnDispatcherAsync(Func<Task> action) =>
+        Dispatcher.InvokeAsync(action).Task.Unwrap();
+
+    private void PetVisibilityToggleRequested(object? sender, EventArgs e) =>
+        _petHost?.ToggleVisibility();
+
+    private void PetAdjustmentRequested(object? sender, EventArgs e) =>
+        _petHost?.BeginAdjustment();
 
     private void OperationCompleted(string title, string message)
     {

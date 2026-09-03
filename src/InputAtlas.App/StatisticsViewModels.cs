@@ -2,6 +2,8 @@ using InputAtlas.Core;
 
 namespace InputAtlas.App;
 
+public sealed record PetScaleOption(double Value, string DisplayName);
+
 public sealed record InputRankingItem(
     int Rank,
     string Label,

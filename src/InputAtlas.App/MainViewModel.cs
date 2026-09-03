@@ -132,6 +132,8 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
 
     public event Action<InputId, bool>? InputVisualStateChanged;
 
+    public event Action<AppSettings>? PetSettingsChanged;
+
     /// <summary>
     /// 通知宿主应用显示一次操作完成提示（通常为 Windows 托盘气泡通知）。
     /// </summary>
@@ -187,6 +189,23 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
     public string CaptureControlHint => IsCapturePaused
         ? "记录当前已暂停；恢复后将继续累计输入次数。"
         : "记录正在运行；暂停前会先保存当前统计。";
+
+    public bool PetEnabled => _settings.PetEnabled;
+
+    public bool PetTopmost => _settings.PetTopmost;
+
+    public bool PetClickThrough => _settings.PetClickThrough;
+
+    public double PetScale => _settings.PetScale;
+
+    public IReadOnlyList<PetScaleOption> PetScaleOptions { get; } =
+    [
+        new(0.5, "50% · 小巧"),
+        new(0.65, "65%"),
+        new(0.75, "75% · 默认"),
+        new(1.0, "100%"),
+        new(1.25, "125% · 大号"),
+    ];
 
     public string CurrentDate
     {
@@ -648,6 +667,88 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
             $"enabled={enabled} registry_enabled={StartupRegistration.IsEnabled()} launch_mode=background");
     }
 
+    public async Task SetPetEnabledAsync(bool enabled)
+    {
+        if (_settings.PetEnabled == enabled)
+        {
+            return;
+        }
+
+        await SavePetSettingsAsync(_settings with { PetEnabled = enabled }, "enabled", enabled.ToString());
+    }
+
+    public async Task SetPetTopmostAsync(bool enabled)
+    {
+        if (_settings.PetTopmost == enabled)
+        {
+            return;
+        }
+
+        await SavePetSettingsAsync(_settings with { PetTopmost = enabled }, "topmost", enabled.ToString());
+    }
+
+    public async Task SetPetClickThroughAsync(bool enabled)
+    {
+        if (_settings.PetClickThrough == enabled)
+        {
+            return;
+        }
+
+        await SavePetSettingsAsync(_settings with { PetClickThrough = enabled }, "click_through", enabled.ToString());
+    }
+
+    public async Task SetPetScaleAsync(double scale)
+    {
+        if (!double.IsFinite(scale) || scale < AppSettings.MinimumPetScale || scale > AppSettings.MaximumPetScale)
+        {
+            _log.Warning("pet_scale_rejected", $"scale={scale.ToString(CultureInfo.InvariantCulture)}");
+            return;
+        }
+
+        if (Math.Abs(_settings.PetScale - scale) < 0.001)
+        {
+            return;
+        }
+
+        await SavePetSettingsAsync(
+            _settings with { PetScale = scale },
+            "scale",
+            scale.ToString("F2", CultureInfo.InvariantCulture));
+    }
+
+    public async Task UpdatePetPlacementAsync(double left, double top, string? monitorDeviceName)
+    {
+        if (!double.IsFinite(left) || !double.IsFinite(top))
+        {
+            _log.Warning("pet_placement_rejected", "reason=non_finite_coordinate");
+            return;
+        }
+
+        var normalizedMonitor = string.IsNullOrWhiteSpace(monitorDeviceName) ? null : monitorDeviceName.Trim();
+        await SavePetSettingsAsync(
+            _settings with
+            {
+                PetLeft = left,
+                PetTop = top,
+                PetMonitorDeviceName = normalizedMonitor,
+            },
+            "placement",
+            $"left={left:F1} top={top:F1} monitor_present={normalizedMonitor is not null}");
+    }
+
+    public async Task ResetPetPlacementAsync()
+    {
+        await SavePetSettingsAsync(
+            _settings with
+            {
+                PetLeft = null,
+                PetTop = null,
+                PetMonitorDeviceName = null,
+            },
+            "placement_reset",
+            "target=primary_screen_bottom_right");
+    }
+
     public async Task ApplyHeatmapThresholdsAsync()
     {
         if (!TryParsePositiveLong(HeatmapCoolThresholdText, out var cool) ||
@@ -947,6 +1048,19 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
         _refreshCancellation?.Dispose();
         _refreshGate.Dispose();
         await Task.CompletedTask;
+    }
+
+    private async Task SavePetSettingsAsync(AppSettings settings, string field, string value)
+    {
+        _settings = settings;
+        await _settingsStore.SaveAsync(_settings);
+        RaisePropertyChanged(nameof(Settings));
+        RaisePropertyChanged(nameof(PetEnabled));
+        RaisePropertyChanged(nameof(PetTopmost));
+        RaisePropertyChanged(nameof(PetClickThrough));
+        RaisePropertyChanged(nameof(PetScale));
+        _log.Information("pet_setting_changed", $"field={field} value={value}");
+        PetSettingsChanged?.Invoke(_settings);
     }
 
     private void NotifyOperationCompleted(string title, string message)

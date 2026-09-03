@@ -155,4 +155,17 @@ public sealed class InputCounterEngineTests
         Assert.Contains(new InputId(0x04), releases);
         Assert.Contains(InputId.MouseLeft, releases);
     }
+
+    [Fact]
+    public void MouseSampleWithoutButtonFlagsProducesNoStateOrCount()
+    {
+        var engine = new InputCounterEngine(Now);
+        var transitions = new List<(InputId Input, bool IsPressed)>();
+        engine.StateChanged += (input, isPressed) => transitions.Add((input, isPressed));
+
+        engine.HandleMouse(new RawMouseSample(RawMouseButtons.None, 0), Now);
+
+        Assert.Empty(transitions);
+        Assert.Empty(engine.Snapshot(Now).Counts);
+    }
 }

@@ -27,7 +27,13 @@ public enum AnimationKind
 
 public sealed record AppSettings
 {
-    public int SchemaVersion { get; init; } = 5;
+    public const double MinimumPetScale = 0.4;
+
+    public const double MaximumPetScale = 1.5;
+
+    public const double DefaultPetScale = 0.75;
+
+    public int SchemaVersion { get; init; } = 6;
 
     public bool OnboardingCompleted { get; init; }
 
@@ -62,6 +68,20 @@ public sealed record AppSettings
     public double WindowHeight { get; init; } = 800;
 
     public bool WindowMaximized { get; init; }
+
+    public bool PetEnabled { get; init; }
+
+    public bool PetTopmost { get; init; } = true;
+
+    public bool PetClickThrough { get; init; } = true;
+
+    public double PetScale { get; init; } = DefaultPetScale;
+
+    public double? PetLeft { get; init; }
+
+    public double? PetTop { get; init; }
+
+    public string? PetMonitorDeviceName { get; init; }
 }
 
 public sealed class AppSettingsStore(string settingsPath)
@@ -126,10 +146,18 @@ public sealed class AppSettingsStore(string settingsPath)
 
         settings = settings with
         {
-            SchemaVersion = 5,
+            SchemaVersion = 6,
             FontFamily = string.IsNullOrWhiteSpace(settings.FontFamily)
                 ? "Segoe UI Variable Text"
                 : settings.FontFamily.Trim(),
+            PetScale = IsValidPetScale(settings.PetScale)
+                ? settings.PetScale
+                : AppSettings.DefaultPetScale,
+            PetLeft = IsFinite(settings.PetLeft) ? settings.PetLeft : null,
+            PetTop = IsFinite(settings.PetTop) ? settings.PetTop : null,
+            PetMonitorDeviceName = string.IsNullOrWhiteSpace(settings.PetMonitorDeviceName)
+                ? null
+                : settings.PetMonitorDeviceName.Trim(),
         };
 
         if (HasValidHeatmapThresholds(settings))
@@ -170,4 +198,11 @@ public sealed class AppSettingsStore(string settingsPath)
         settings.HeatmapCoolThreshold > 0 &&
         settings.HeatmapCoolThreshold < settings.HeatmapWarmThreshold &&
         settings.HeatmapWarmThreshold < settings.HeatmapHotThreshold;
+
+    private static bool IsValidPetScale(double scale) =>
+        double.IsFinite(scale) &&
+        scale >= AppSettings.MinimumPetScale &&
+        scale <= AppSettings.MaximumPetScale;
+
+    private static bool IsFinite(double? value) => value is null || double.IsFinite(value.Value);
 }

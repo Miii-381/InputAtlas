@@ -29,6 +29,10 @@ public partial class MainWindow : Window
 
     public event EventHandler? HiddenToTray;
 
+    public event EventHandler? PetVisibilityToggleRequested;
+
+    public event EventHandler? PetAdjustmentRequested;
+
     public MainWindow(MainViewModel viewModel, AppSettings settings)
     {
         _viewModel = viewModel;
@@ -318,6 +322,47 @@ public partial class MainWindow : Window
             await _viewModel.SetStartWithWindowsAsync(checkBox.IsChecked == true);
         }
     }
+
+    private async void PetEnabledClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.CheckBox checkBox)
+        {
+            await _viewModel.SetPetEnabledAsync(checkBox.IsChecked == true);
+        }
+    }
+
+    private async void PetTopmostClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.CheckBox checkBox)
+        {
+            await _viewModel.SetPetTopmostAsync(checkBox.IsChecked == true);
+        }
+    }
+
+    private async void PetClickThroughClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.CheckBox checkBox)
+        {
+            await _viewModel.SetPetClickThroughAsync(checkBox.IsChecked == true);
+        }
+    }
+
+    private async void PetScaleChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.ComboBox { SelectedValue: double scale })
+        {
+            await _viewModel.SetPetScaleAsync(scale);
+        }
+    }
+
+    private void TogglePetVisibilityClick(object sender, RoutedEventArgs e) =>
+        PetVisibilityToggleRequested?.Invoke(this, EventArgs.Empty);
+
+    private void AdjustPetPositionClick(object sender, RoutedEventArgs e) =>
+        PetAdjustmentRequested?.Invoke(this, EventArgs.Empty);
+
+    private async void ResetPetPositionClick(object sender, RoutedEventArgs e) =>
+        await _viewModel.ResetPetPlacementAsync();
 
     private async void ApplyHeatmapThresholdsClick(object sender, RoutedEventArgs e) =>
         await _viewModel.ApplyHeatmapThresholdsAsync();

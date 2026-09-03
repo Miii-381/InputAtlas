@@ -25,6 +25,7 @@
     <EmbeddedResource Include="Layouts\*.json" />
     <Resource Include="Assets\inputatlas-esc-icon.ico" />
     <Resource Include="Assets\inputatlas-esc-icon.png" />
+    <Resource Include="Assets\Pet\GoldenMaid\*.png" />
     <Content Include="..\..\LICENSES\THIRD-PARTY-NOTICES.md" Link="Licenses\THIRD-PARTY-NOTICES.md">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>

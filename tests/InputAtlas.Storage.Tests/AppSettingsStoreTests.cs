@@ -89,7 +89,7 @@ public sealed class AppSettingsStoreTests
 
             var loaded = await store.LoadAsync();
 
-            Assert.Equal(5, loaded.SchemaVersion);
+            Assert.Equal(6, loaded.SchemaVersion);
             Assert.Equal(100, loaded.HeatmapCoolThreshold);
             Assert.Equal(500, loaded.HeatmapWarmThreshold);
             Assert.Equal(2000, loaded.HeatmapHotThreshold);
@@ -119,7 +119,7 @@ public sealed class AppSettingsStoreTests
 
             var loaded = await store.LoadAsync();
 
-            Assert.Equal(5, loaded.SchemaVersion);
+            Assert.Equal(6, loaded.SchemaVersion);
             Assert.Equal("#F3D48D", loaded.AccentColor);
         }
         finally
@@ -147,7 +147,7 @@ public sealed class AppSettingsStoreTests
 
             var loaded = await store.LoadAsync();
 
-            Assert.Equal(5, loaded.SchemaVersion);
+            Assert.Equal(6, loaded.SchemaVersion);
             Assert.Equal("#F3D48D", loaded.AccentColor);
         }
         finally
@@ -183,10 +183,51 @@ public sealed class AppSettingsStoreTests
             var migratedDefault = await defaultStore.LoadAsync();
             var preservedCustom = await customStore.LoadAsync();
 
-            Assert.Equal(5, migratedDefault.SchemaVersion);
+            Assert.Equal(6, migratedDefault.SchemaVersion);
             Assert.Equal("#F3D48D", migratedDefault.AccentColor);
-            Assert.Equal(5, preservedCustom.SchemaVersion);
+            Assert.Equal(6, preservedCustom.SchemaVersion);
             Assert.Equal("#86A9CF", preservedCustom.AccentColor);
+        }
+        finally
+        {
+            if (Directory.Exists(directory))
+            {
+                Directory.Delete(directory, true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task VersionFiveSettingsMigrateToSafePetDefaults()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "InputAtlas.Tests", Guid.NewGuid().ToString("N"));
+        var path = Path.Combine(directory, "config.json");
+        try
+        {
+            Directory.CreateDirectory(directory);
+            await File.WriteAllTextAsync(
+                path,
+                """
+                {
+                  "schema_version": 5,
+                  "pet_enabled": true,
+                  "pet_scale": 8.0,
+                  "pet_left": null,
+                  "pet_top": 120.0,
+                  "pet_monitor_device_name": "  DISPLAY-2  "
+                }
+                """);
+
+            var loaded = await new AppSettingsStore(path).LoadAsync();
+
+            Assert.Equal(6, loaded.SchemaVersion);
+            Assert.True(loaded.PetEnabled);
+            Assert.True(loaded.PetTopmost);
+            Assert.True(loaded.PetClickThrough);
+            Assert.Equal(AppSettings.DefaultPetScale, loaded.PetScale);
+            Assert.Null(loaded.PetLeft);
+            Assert.Equal(120, loaded.PetTop);
+            Assert.Equal("DISPLAY-2", loaded.PetMonitorDeviceName);
         }
         finally
         {

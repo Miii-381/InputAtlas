@@ -791,6 +791,65 @@
                             <StackPanel Grid.Column="2">
                                 <Border Style="{StaticResource SurfaceCard}" Padding="24">
                                     <StackPanel>
+                                        <TextBlock Text="输入桌宠" FontSize="20" FontWeight="SemiBold" />
+                                        <TextBlock Text="本地离线响应键盘与五键鼠标；不读取鼠标位置，滚轮不会触发动作。"
+                                                   Foreground="{StaticResource MutedTextBrush}"
+                                                   FontSize="13"
+                                                   TextWrapping="Wrap"
+                                                   Margin="0,4,0,12" />
+                                        <CheckBox Content="启用桌宠（默认关闭）"
+                                                  IsChecked="{Binding PetEnabled, Mode=OneWay}"
+                                                  Click="PetEnabledClick" />
+                                        <CheckBox Content="始终置顶"
+                                                  IsChecked="{Binding PetTopmost, Mode=OneWay}"
+                                                  IsEnabled="{Binding PetEnabled}"
+                                                  Click="PetTopmostClick"
+                                                  Margin="0,8,0,0" />
+                                        <CheckBox Content="鼠标穿透"
+                                                  IsChecked="{Binding PetClickThrough, Mode=OneWay}"
+                                                  IsEnabled="{Binding PetEnabled}"
+                                                  Click="PetClickThroughClick"
+                                                  Margin="0,8,0,0" />
+                                        <TextBlock Text="显示比例" FontWeight="SemiBold" Margin="0,14,0,5" />
+                                        <ComboBox ItemsSource="{Binding PetScaleOptions}"
+                                                  SelectedValuePath="Value"
+                                                  SelectedValue="{Binding PetScale, Mode=OneWay}"
+                                                  IsEnabled="{Binding PetEnabled}"
+                                                  SelectionChanged="PetScaleChanged">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Text="{Binding DisplayName}" />
+                                                </DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+                                        <WrapPanel Margin="0,10,0,0">
+                                            <Button Content="显示 / 隐藏"
+                                                    Style="{StaticResource SecondaryButton}"
+                                                    IsEnabled="{Binding PetEnabled}"
+                                                    Click="TogglePetVisibilityClick"
+                                                    Width="116" />
+                                            <Button Content="调整位置"
+                                                    IsEnabled="{Binding PetEnabled}"
+                                                    Click="AdjustPetPositionClick"
+                                                    Width="104"
+                                                    Margin="8,4,0,4" />
+                                            <Button Content="重置位置"
+                                                    Style="{StaticResource SecondaryButton}"
+                                                    IsEnabled="{Binding PetEnabled}"
+                                                    Click="ResetPetPositionClick"
+                                                    Width="104"
+                                                    Margin="8,4,0,4" />
+                                        </WrapPanel>
+                                        <TextBlock Text="调整位置会临时关闭穿透；拖动一次后自动恢复，靠近屏幕或任务栏边缘会自动吸附。重置位置会将桌宠放回主屏幕右下角。"
+                                                   Foreground="{StaticResource MutedTextBrush}"
+                                                   FontSize="12"
+                                                   TextWrapping="Wrap"
+                                                   Margin="0,6,0,0" />
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Style="{StaticResource SurfaceCard}" Padding="24">
+                                    <StackPanel>
                                         <TextBlock Text="本地数据" FontSize="20" FontWeight="SemiBold" />
                                         <TextBlock Text="所有操作均在本机完成，成功后会显示 Windows 通知；按日期删除请前往 分析 → 历史分析仪表盘。"
                                                    Foreground="{StaticResource MutedTextBrush}"

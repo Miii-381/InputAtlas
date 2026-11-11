@@ -3,55 +3,164 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:InputAtlas.App"
         xmlns:oxy="http://oxyplot.org/wpf"
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         Title="InputAtlas 输入图谱"
         Icon="Assets/inputatlas-esc-icon.ico"
         Width="1360"
         Height="860"
         MinWidth="960"
         MinHeight="620"
+        WindowStyle="None"
         WindowStartupLocation="CenterScreen"
         Closing="WindowClosing"
         PreviewMouseLeftButtonDown="WindowPreviewMouseLeftButtonDown"
         PreviewMouseMove="WindowPreviewMouseMove"
         Deactivated="WindowDeactivated">
-    <Grid x:Name="RootLayout" Background="{StaticResource WindowBrush}">
+    <shell:WindowChrome.WindowChrome>
+        <!-- 系统负责拖动、双击最大化和边缘缩放；按钮单独参与客户区命中测试。 -->
+        <shell:WindowChrome CaptionHeight="48" ResizeBorderThickness="6" GlassFrameThickness="0"
+                            CornerRadius="0" UseAeroCaptionButtons="False" />
+    </shell:WindowChrome.WindowChrome>
+    <Window.Resources>
+        <Style x:Key="CaptionButton" TargetType="Button">
+            <Setter Property="Width" Value="40" />
+            <Setter Property="Height" Value="30" />
+            <Setter Property="Margin" Value="2,0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="FontFamily" Value="Segoe MDL2 Assets" />
+            <Setter Property="FontSize" Value="10" />
+            <Setter Property="shell:WindowChrome.IsHitTestVisibleInChrome" Value="True" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Surface" Background="{TemplateBinding Background}" CornerRadius="8">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Surface" Property="Background" Value="{StaticResource CardHighBrush}" />
+                                <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Surface" Property="Background" Value="{DynamicResource AccentContainerBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Surface" Property="Background" Value="{DynamicResource AccentContainerBrush}" />
+                            </Trigger>
+                            <MultiTrigger>
+                                <MultiTrigger.Conditions>
+                                    <Condition Property="Tag" Value="Close" />
+                                    <Condition Property="IsMouseOver" Value="True" />
+                                </MultiTrigger.Conditions>
+                                <Setter TargetName="Surface" Property="Background" Value="#FBE5DF" />
+                                <Setter Property="Foreground" Value="#A43D35" />
+                            </MultiTrigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+    <Grid Background="{StaticResource WindowBrush}">
+        <Grid.Style>
+            <Style TargetType="Grid">
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding WindowState, RelativeSource={RelativeSource AncestorType=Window}}" Value="Maximized">
+                        <!-- 最大化时避开系统保留的不可见缩放边框。 -->
+                        <Setter Property="Margin" Value="8" />
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+        </Grid.Style>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="48" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1">
+            <Grid Margin="22,0,12,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <Border Width="28" Height="28" CornerRadius="8" Background="{DynamicResource AccentContainerBrush}">
+                        <Image Source="Assets/inputatlas-esc-icon.png" Width="20" Height="20" />
+                    </Border>
+                    <TextBlock Text="InputAtlas" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" Margin="10,0,0,0" />
+                    <Border Width="1" Height="14" Background="{StaticResource BorderBrush}" Margin="14,0" />
+                    <TextBlock Text="输入图谱" Foreground="{StaticResource MutedTextBrush}" FontSize="12" VerticalAlignment="Center" />
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Style="{StaticResource CaptionButton}" Content="&#xE921;" Click="MinimizeWindowClick"
+                            ToolTip="最小化" AutomationProperties.Name="最小化" />
+                    <Button Click="ToggleMaximizeWindowClick" AutomationProperties.Name="最大化或还原">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource CaptionButton}">
+                                <Setter Property="Content" Value="&#xE922;" />
+                                <Setter Property="ToolTip" Value="最大化" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding WindowState, RelativeSource={RelativeSource AncestorType=Window}}" Value="Maximized">
+                                        <Setter Property="Content" Value="&#xE923;" />
+                                        <Setter Property="ToolTip" Value="还原" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+                    <Button Style="{StaticResource CaptionButton}" Tag="Close" Content="&#xE8BB;" Click="CloseWindowClick"
+                            ToolTip="关闭并隐藏到托盘" AutomationProperties.Name="关闭并隐藏到托盘" />
+                </StackPanel>
+            </Grid>
+            <Border.Style>
+                <Style TargetType="Border">
+                    <Setter Property="Background" Value="{StaticResource PanelBrush}" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsActive, RelativeSource={RelativeSource AncestorType=Window}}" Value="False">
+                            <Setter Property="Opacity" Value="0.65" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+        </Border>
+    <Grid x:Name="RootLayout" Grid.Row="1" Background="{StaticResource WindowBrush}">
         <Grid>
             <Grid.RowDefinitions>
-                <RowDefinition Height="92" />
+                <RowDefinition Height="108" />
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
 
-            <!-- Material top app bar -->
+            <!-- 页面信息与品牌栏分层，日期卡片采用紧凑的横向排版。 -->
             <Border Padding="28,0,26,0" Background="{StaticResource WindowBrush}">
                 <Grid>
-                    <StackPanel VerticalAlignment="Center">
-                        <TextBlock Text="{Binding PageTitle}" FontSize="28" FontWeight="SemiBold" />
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel VerticalAlignment="Center" Margin="0,0,20,0">
+                        <TextBlock Text="{Binding PageTitle}" FontSize="26" FontWeight="SemiBold" />
                         <TextBlock Text="{Binding PageSubtitle}"
                                    Foreground="{StaticResource MutedTextBrush}"
                                    FontSize="14"
-                                   Margin="0,4,0,0" />
+                                   Margin="0,5,0,0" TextTrimming="CharacterEllipsis" />
                         <TextBlock Text="{Binding ActivityScoreFormula}"
                                    Foreground="{StaticResource MutedTextBrush}"
-                                   FontSize="13"
+                                   FontSize="12"
                                    Margin="0,3,0,0" />
                     </StackPanel>
-                    <StackPanel HorizontalAlignment="Right" VerticalAlignment="Center" Orientation="Horizontal">
-                        <Border Background="{StaticResource CardBrush}" CornerRadius="14" Padding="16,10">
-                            <StackPanel>
-                                <TextBlock Text="{Binding CurrentDate}"
-                                           FontSize="21"
-                                           FontWeight="SemiBold"
-                                           HorizontalAlignment="Right" />
-                                <TextBlock Text="{Binding CurrentTime}"
-                                           FontSize="15"
-                                           FontWeight="SemiBold"
-                                           HorizontalAlignment="Right"
-                                           Margin="0,1,0,0" />
-                                <TextBlock Text="{Binding TimeZoneLabel}"
-                                           Foreground="{StaticResource MutedTextBrush}"
-                                           FontSize="12"
-                                           Margin="0,1,0,0"
-                                           HorizontalAlignment="Right" />
+                    <StackPanel Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center" Orientation="Horizontal">
+                        <Border Background="{StaticResource CardBrush}" BorderBrush="{StaticResource BorderBrush}"
+                                BorderThickness="1" CornerRadius="14" Padding="18,12">
+                            <StackPanel Orientation="Horizontal">
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding CurrentDate}" FontSize="14" FontWeight="SemiBold" />
+                                    <TextBlock Text="{Binding TimeZoneLabel}" Foreground="{StaticResource MutedTextBrush}"
+                                               FontSize="11" Margin="0,4,0,0" />
+                                </StackPanel>
+                                <Border Width="1" Background="{StaticResource BorderBrush}" Margin="18,2" />
+                                <TextBlock Text="{Binding CurrentTime}" FontSize="28" FontWeight="SemiBold" VerticalAlignment="Center" />
                             </StackPanel>
                         </Border>
                     </StackPanel>
@@ -1017,5 +1126,6 @@
                     HorizontalAlignment="Center"
                     VerticalAlignment="Center" />
         </Border>
+    </Grid>
     </Grid>
 </Window>

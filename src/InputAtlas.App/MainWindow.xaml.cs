@@ -20,6 +20,7 @@ public partial class MainWindow : Window
     private const double DockDismissHorizontalDistance = 128;
     private const double DockDismissVerticalDistance = 88;
     private readonly MainViewModel _viewModel;
+    private readonly IApplicationLog _log;
     private readonly bool _animationsEnabled;
     private readonly DispatcherTimer _navigationDockHideTimer;
     private bool _allowClose;
@@ -33,9 +34,10 @@ public partial class MainWindow : Window
 
     public event EventHandler? PetAdjustmentRequested;
 
-    public MainWindow(MainViewModel viewModel, AppSettings settings)
+    public MainWindow(MainViewModel viewModel, AppSettings settings, IApplicationLog log)
     {
         _viewModel = viewModel;
+        _log = log;
         _animationsEnabled = settings.Animation != AnimationKind.Off && SystemParameters.ClientAreaAnimation;
         InitializeComponent();
         _navigationDockHideTimer = new DispatcherTimer(DispatcherPriority.Background)
@@ -46,7 +48,13 @@ public partial class MainWindow : Window
         DataContext = viewModel;
         Width = Math.Max(MinWidth, settings.WindowWidth);
         Height = Math.Max(MinHeight, settings.WindowHeight);
-        SourceInitialized += (_, _) => ClampToCurrentMonitorWorkArea();
+        SourceInitialized += (_, _) =>
+        {
+            ClampToCurrentMonitorWorkArea();
+            _log.Information("window_shell_initialized", $"caption_height=48 resize_border=6 state={WindowState}");
+        };
+        StateChanged += (_, _) =>
+            _log.Information("window_shell_state_changed", $"state={WindowState}");
         DpiChanged += (_, _) => Dispatcher.BeginInvoke(ClampToCurrentMonitorWorkArea);
         if (settings.WindowMaximized)
         {
@@ -73,6 +81,33 @@ public partial class MainWindow : Window
     {
         _allowClose = true;
         Close();
+    }
+
+    private void MinimizeWindowClick(object sender, RoutedEventArgs e)
+    {
+        _log.Information("window_shell_action", "action=minimize");
+        SystemCommands.MinimizeWindow(this);
+    }
+
+    private void ToggleMaximizeWindowClick(object sender, RoutedEventArgs e)
+    {
+        var restore = WindowState == WindowState.Maximized;
+        _log.Information("window_shell_action", $"action={(restore ? "restore" : "maximize")}");
+        if (restore)
+        {
+            SystemCommands.RestoreWindow(this);
+        }
+        else
+        {
+            SystemCommands.MaximizeWindow(this);
+        }
+    }
+
+    // 统一进入已有的 Closing 流程，继续保留关闭后隐藏到托盘的行为。
+    private void CloseWindowClick(object sender, RoutedEventArgs e)
+    {
+        _log.Information("window_shell_action", "action=close_to_tray");
+        SystemCommands.CloseWindow(this);
     }
 
     private void WindowClosing(object? sender, CancelEventArgs e)

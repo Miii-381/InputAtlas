@@ -127,7 +127,7 @@ public partial class App : Application, IAsyncDisposable
                 _settings,
                 _log);
             _viewModel = viewModel;
-            _window = new MainWindow(viewModel, _settings);
+            _window = new MainWindow(viewModel, _settings, _log);
             MainWindow = _window;
             viewModel.OperationCompleted += OperationCompleted;
             viewModel.PetSettingsChanged += PetSettingsChanged;

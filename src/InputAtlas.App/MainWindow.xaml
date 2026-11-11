@@ -63,77 +63,9 @@
                 </Setter.Value>
             </Setter>
         </Style>
-    </Window.Resources>
-    <Grid Background="{StaticResource WindowBrush}">
-        <Grid.Style>
-            <Style TargetType="Grid">
-                <Style.Triggers>
-                    <DataTrigger Binding="{Binding WindowState, RelativeSource={RelativeSource AncestorType=Window}}" Value="Maximized">
-                        <!-- 最大化时避开系统保留的不可见缩放边框。 -->
-                        <Setter Property="Margin" Value="8" />
-                    </DataTrigger>
-                </Style.Triggers>
-            </Style>
-        </Grid.Style>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="48" />
-            <RowDefinition Height="*" />
-        </Grid.RowDefinitions>
-        <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1">
-            <Grid Margin="22,0,12,0">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <Border Width="28" Height="28" CornerRadius="8" Background="{DynamicResource AccentContainerBrush}">
-                        <Image Source="Assets/inputatlas-esc-icon.png" Width="20" Height="20" />
-                    </Border>
-                    <TextBlock Text="InputAtlas" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" Margin="10,0,0,0" />
-                    <Border Width="1" Height="14" Background="{StaticResource BorderBrush}" Margin="14,0" />
-                    <TextBlock Text="输入图谱" Foreground="{StaticResource MutedTextBrush}" FontSize="12" VerticalAlignment="Center" />
-                </StackPanel>
-                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                    <Button Style="{StaticResource CaptionButton}" Content="&#xE921;" Click="MinimizeWindowClick"
-                            ToolTip="最小化" AutomationProperties.Name="最小化" />
-                    <Button Click="ToggleMaximizeWindowClick" AutomationProperties.Name="最大化或还原">
-                        <Button.Style>
-                            <Style TargetType="Button" BasedOn="{StaticResource CaptionButton}">
-                                <Setter Property="Content" Value="&#xE922;" />
-                                <Setter Property="ToolTip" Value="最大化" />
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding WindowState, RelativeSource={RelativeSource AncestorType=Window}}" Value="Maximized">
-                                        <Setter Property="Content" Value="&#xE923;" />
-                                        <Setter Property="ToolTip" Value="还原" />
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </Button.Style>
-                    </Button>
-                    <Button Style="{StaticResource CaptionButton}" Tag="Close" Content="&#xE8BB;" Click="CloseWindowClick"
-                            ToolTip="关闭并隐藏到托盘" AutomationProperties.Name="关闭并隐藏到托盘" />
-                </StackPanel>
-            </Grid>
-            <Border.Style>
-                <Style TargetType="Border">
-                    <Setter Property="Background" Value="{StaticResource PanelBrush}" />
-                    <Style.Triggers>
-                        <DataTrigger Binding="{Binding IsActive, RelativeSource={RelativeSource AncestorType=Window}}" Value="False">
-                            <Setter Property="Opacity" Value="0.65" />
-                        </DataTrigger>
-                    </Style.Triggers>
-                </Style>
-            </Border.Style>
-        </Border>
-    <Grid x:Name="RootLayout" Grid.Row="1" Background="{StaticResource WindowBrush}">
-        <Grid>
-            <Grid.RowDefinitions>
-                <RowDefinition Height="108" />
-                <RowDefinition Height="*" />
-            </Grid.RowDefinitions>
-
-            <!-- 页面信息与品牌栏分层，日期卡片采用紧凑的横向排版。 -->
-            <Border Padding="28,0,26,0" Background="{StaticResource WindowBrush}">
+        <!-- 页面信息属于滚动内容；三个分页共用样式，不占用固定标题栏。 -->
+        <DataTemplate x:Key="PageHeaderTemplate">
+            <Border MinHeight="108" Padding="6,14,4,14" Background="{StaticResource WindowBrush}">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
@@ -166,13 +98,69 @@
                     </StackPanel>
                 </Grid>
             </Border>
+        </DataTemplate>
+    </Window.Resources>
+    <Grid x:Name="RootLayout" Background="{StaticResource WindowBrush}">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="48" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1">
+                <Grid Margin="22,0,12,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Border Width="28" Height="28" CornerRadius="8" Background="{DynamicResource AccentContainerBrush}">
+                            <Image Source="Assets/inputatlas-esc-icon.png" Width="20" Height="20" />
+                        </Border>
+                        <TextBlock Text="InputAtlas" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" Margin="10,0,0,0" />
+                        <Border Width="1" Height="14" Background="{StaticResource BorderBrush}" Margin="14,0" />
+                        <TextBlock Text="输入图谱" Foreground="{StaticResource MutedTextBrush}" FontSize="12" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button Style="{StaticResource CaptionButton}" Content="&#xE921;" Click="MinimizeWindowClick"
+                                ToolTip="最小化" AutomationProperties.Name="最小化" />
+                        <Button Click="ToggleMaximizeWindowClick" AutomationProperties.Name="最大化或还原">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource CaptionButton}">
+                                    <Setter Property="Content" Value="&#xE922;" />
+                                    <Setter Property="ToolTip" Value="最大化" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding WindowState, RelativeSource={RelativeSource AncestorType=Window}}" Value="Maximized">
+                                            <Setter Property="Content" Value="&#xE923;" />
+                                            <Setter Property="ToolTip" Value="还原" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+                        <Button Style="{StaticResource CaptionButton}" Tag="Close" Content="&#xE8BB;" Click="CloseWindowClick"
+                                ToolTip="关闭并隐藏到托盘" AutomationProperties.Name="关闭并隐藏到托盘" />
+                    </StackPanel>
+                </Grid>
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Setter Property="Background" Value="{StaticResource PanelBrush}" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsActive, RelativeSource={RelativeSource AncestorType=Window}}" Value="False">
+                                <Setter Property="Opacity" Value="0.65" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+            </Border>
 
             <TabControl Grid.Row="1"
                         Style="{StaticResource PageTabControl}"
                         SelectedIndex="{Binding PageIndex}">
                 <TabItem>
                     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                        <StackPanel Margin="22,4,22,26">
+                        <StackPanel Margin="22,0,22,26">
+                            <ContentControl Content="{Binding}" ContentTemplate="{StaticResource PageHeaderTemplate}" HorizontalContentAlignment="Stretch" />
                             <UniformGrid Columns="6" Margin="-6,0,-6,14">
                                 <Border Style="{StaticResource MetricCard}" Background="{Binding ActivityScoreBackground}">
                                     <StackPanel>
@@ -396,6 +384,8 @@
                     <!-- 统一分析仪表盘：日期筛选、范围摘要、趋势与统计维度在同一滚动页面内。 -->
                     <ScrollViewer VerticalScrollBarVisibility="Auto"
                                   HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel>
+                            <ContentControl Margin="22,0,22,0" Content="{Binding}" ContentTemplate="{StaticResource PageHeaderTemplate}" HorizontalContentAlignment="Stretch" />
                         <Grid Margin="22,0,22,100" HorizontalAlignment="Stretch">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />
@@ -728,11 +718,14 @@
                                 </Grid>
                             </Border>
                         </Grid>
+                        </StackPanel>
                     </ScrollViewer>
                 </TabItem>
 
                 <TabItem>
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel>
+                            <ContentControl Margin="22,0,22,0" Content="{Binding}" ContentTemplate="{StaticResource PageHeaderTemplate}" HorizontalContentAlignment="Stretch" />
                         <Grid Margin="22,4,22,100" HorizontalAlignment="Stretch">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="0.9*" MinWidth="260" />
@@ -990,6 +983,7 @@
                                 </Border>
                             </StackPanel>
                         </Grid>
+                        </StackPanel>
                     </ScrollViewer>
                 </TabItem>
             </TabControl>
@@ -1126,6 +1120,5 @@
                     HorizontalAlignment="Center"
                     VerticalAlignment="Center" />
         </Border>
-    </Grid>
     </Grid>
 </Window>

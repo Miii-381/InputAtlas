@@ -1,4 +1,6 @@
 using BenchmarkDotNet.Attributes;
+using BenchmarkDotNet.Configs;
+using BenchmarkDotNet.Jobs;
 using BenchmarkDotNet.Running;
 using InputAtlas.Core;
 
@@ -6,7 +8,13 @@ namespace InputAtlas.Benchmarks;
 
 internal static class Program
 {
-    public static void Main() => BenchmarkRunner.Run<InputHotPathBenchmarks>();
+    public static void Main()
+    {
+        // 保留用户当前的电源设置，禁用 BenchmarkDotNet 默认的高性能计划切换。
+        var config = ManualConfig.Create(DefaultConfig.Instance)
+            .AddJob(Job.Default.DontEnforcePowerPlan());
+        BenchmarkRunner.Run<InputHotPathBenchmarks>(config);
+    }
 }
 
 [MemoryDiagnoser]

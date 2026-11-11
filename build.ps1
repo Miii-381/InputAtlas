@@ -3,7 +3,7 @@ param(
     [ValidateSet('check', 'test', 'benchmark', 'ci', 'package', 'release')]
     [string]$Command = 'check',
 
-    [string]$Version = '1.1.0'
+    [string]$Version = '1.1.1'
 )
 
 chcp 65001 > $null

@@ -19,8 +19,10 @@ pwsh ./build.ps1 check
 pwsh ./build.ps1 test
 pwsh ./build.ps1 benchmark
 pwsh ./build.ps1 ci
-pwsh ./build.ps1 package -Version 1.1.0
-pwsh ./build.ps1 release -Version 1.1.0
+pwsh ./build.ps1 package -Version 1.1.1
+pwsh ./build.ps1 release -Version 1.1.1
 ```
+
+编译、测试、性能基准和发布均保留用户当前的电源设置。性能基准已显式禁用 BenchmarkDotNet 的自动电源计划切换。
 
 运行数据位于 `InputAtlas.exe` 同级的 `Data` 目录。开发文档是冻结需求基线，具体隐私与统计语义见 `开发文档/开发文档.md`。

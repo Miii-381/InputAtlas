@@ -15,6 +15,7 @@ namespace InputAtlas.App;
 public partial class MainWindow : Window
 {
     private const uint MonitorDefaultToNearest = 2;
+    private const int WmGetMinMaxInfo = 0x0024;
     private const double DockApproachHorizontalDistance = 96;
     private const double DockApproachVerticalDistance = 72;
     private const double DockDismissHorizontalDistance = 128;
@@ -23,6 +24,7 @@ public partial class MainWindow : Window
     private readonly IApplicationLog _log;
     private readonly bool _animationsEnabled;
     private readonly DispatcherTimer _navigationDockHideTimer;
+    private HwndSource? _windowSource;
     private bool _allowClose;
     private bool _navigationDockCollapsed;
     private bool _navigationDockManuallyCollapsed;
@@ -50,6 +52,8 @@ public partial class MainWindow : Window
         Height = Math.Max(MinHeight, settings.WindowHeight);
         SourceInitialized += (_, _) =>
         {
+            _windowSource = HwndSource.FromHwnd(new WindowInteropHelper(this).Handle);
+            _windowSource?.AddHook(WindowMessageHook);
             ClampToCurrentMonitorWorkArea();
             _log.Information("window_shell_initialized", $"caption_height=48 resize_border=6 state={WindowState}");
         };
@@ -65,6 +69,7 @@ public partial class MainWindow : Window
         Closed += (_, _) =>
         {
             _navigationDockHideTimer.Stop();
+            _windowSource?.RemoveHook(WindowMessageHook);
             _viewModel.InputVisualStateChanged -= InputVisualStateChanged;
         };
         Loaded += async (_, _) =>
@@ -481,12 +486,64 @@ public partial class MainWindow : Window
         _viewModel.ReportWindowMetrics(dpi.DpiScaleX, dpi.DpiScaleY, Width, Height, workWidth, workHeight);
     }
 
+    private IntPtr WindowMessageHook(IntPtr handle, int message, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        if (message != WmGetMinMaxInfo)
+        {
+            return IntPtr.Zero;
+        }
+
+        var monitor = MonitorFromWindow(handle, MonitorDefaultToNearest);
+        var info = new MonitorInfo { Size = Marshal.SizeOf<MonitorInfo>() };
+        if (monitor == IntPtr.Zero || !GetMonitorInfo(monitor, ref info))
+        {
+            _log.Warning("window_maximize_bounds_unavailable", $"win32_error={Marshal.GetLastWin32Error()}");
+            return IntPtr.Zero;
+        }
+
+        // WM_GETMINMAXINFO 使用物理像素，位置相对于目标显示器原点。
+        // 直接使用该显示器的工作区，兼容任务栏位于任意边缘及负坐标副屏。
+        var bounds = Marshal.PtrToStructure<MinMaxInfo>(lParam);
+        bounds.MaxPosition.X = info.WorkArea.Left - info.MonitorArea.Left;
+        bounds.MaxPosition.Y = info.WorkArea.Top - info.MonitorArea.Top;
+        bounds.MaxSize.X = info.WorkArea.Right - info.WorkArea.Left;
+        bounds.MaxSize.Y = info.WorkArea.Bottom - info.WorkArea.Top;
+        // 本消息由我们接管，显式保留 WPF 最小尺寸约束；小工作区优先完整显示窗口。
+        var dpi = VisualTreeHelper.GetDpi(this);
+        bounds.MinTrackSize.X = Math.Min((int)Math.Ceiling(MinWidth * dpi.DpiScaleX), bounds.MaxSize.X);
+        bounds.MinTrackSize.Y = Math.Min((int)Math.Ceiling(MinHeight * dpi.DpiScaleY), bounds.MaxSize.Y);
+        Marshal.StructureToPtr(bounds, lParam, false);
+        handled = true;
+        _log.Debug("window_maximize_bounds_applied",
+            $"monitor=({info.MonitorArea.Left},{info.MonitorArea.Top},{info.MonitorArea.Right},{info.MonitorArea.Bottom}) " +
+            $"work=({info.WorkArea.Left},{info.WorkArea.Top},{info.WorkArea.Right},{info.WorkArea.Bottom}) " +
+            $"max_position=({bounds.MaxPosition.X},{bounds.MaxPosition.Y}) max_size=({bounds.MaxSize.X},{bounds.MaxSize.Y})");
+        return IntPtr.Zero;
+    }
+
     [DllImport("user32.dll")]
     private static extern IntPtr MonitorFromWindow(IntPtr windowHandle, uint flags);
 
-    [DllImport("user32.dll", CharSet = CharSet.Auto)]
+    [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GetMonitorInfo(IntPtr monitorHandle, ref MonitorInfo monitorInfo);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativePoint
+    {
+        public int X;
+        public int Y;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MinMaxInfo
+    {
+        public NativePoint Reserved;
+        public NativePoint MaxSize;
+        public NativePoint MaxPosition;
+        public NativePoint MinTrackSize;
+        public NativePoint MaxTrackSize;
+    }
 
     [StructLayout(LayoutKind.Sequential)]
     private struct NativeRect

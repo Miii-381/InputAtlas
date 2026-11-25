@@ -1,5 +1,5 @@
 #ifndef MyAppVersion
-  #define MyAppVersion "1.1.1"
+  #define MyAppVersion "1.1.2"
 #endif
 #ifndef SourceDir
   #define SourceDir "..\artifacts\publish"
@@ -117,7 +117,12 @@ begin
   if FileExists(ExpandConstant('{app}\{#MyAppExeName}')) then
   begin
     Log('检测到已安装实例，正在请求安全退出以便升级。');
-    Exec(ExpandConstant('{app}\{#MyAppExeName}'), '--shutdown-for-update', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    if not Exec(ExpandConstant('{app}\{#MyAppExeName}'), '--shutdown-for-update', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) or (ResultCode <> 0) then
+    begin
+      Log(Format('旧版本退出请求失败，退出码：%d。', [ResultCode]));
+      Result := '请先从托盘退出 InputAtlas，再重试安装。';
+      Exit;
+    end;
     Sleep(500);
     Log(Format('已安装实例退出请求完成，退出码：%d。', [ResultCode]));
   end;

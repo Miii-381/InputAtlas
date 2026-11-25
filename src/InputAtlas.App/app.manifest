@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <assembly manifestVersion="1.0" xmlns="urn:schemas-microsoft-com:asm.v1">
-  <assemblyIdentity version="1.1.0.0" name="InputAtlas.app" />
+  <assemblyIdentity version="1.1.2.0" name="InputAtlas.app" />
   <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
     <security>
       <requestedPrivileges>
+        <!-- 保留普通权限入口供 Windows 登录启动，Program.Main 在创建应用前请求 UAC。 -->
         <requestedExecutionLevel level="asInvoker" uiAccess="false" />
       </requestedPrivileges>
     </security>

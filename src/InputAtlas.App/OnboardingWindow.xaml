@@ -36,7 +36,7 @@
             <TabItem Header="3  后台">
                 <StackPanel Margin="28">
                     <TextBlock Text="后台记录" FontSize="26" FontWeight="SemiBold" Margin="0,0,0,16" />
-                    <CheckBox x:Name="StartWithWindows" Content="登录 Windows 后自动启动（推荐）" Margin="0,8" />
+                    <CheckBox x:Name="StartWithWindows" Content="登录 Windows 后自动启动（需确认管理员权限）" Margin="0,8" />
                     <CheckBox x:Name="KeepForever" Content="永久保留 5 分钟明细（默认保留 365 天）" Margin="0,8" />
                     <TextBlock Text="点击“开始记录”后才会注册 Raw Input。" Foreground="{StaticResource MutedTextBrush}" Margin="0,18,0,0" />
                 </StackPanel>

@@ -45,7 +45,7 @@ public partial class App : Application, IAsyncDisposable
             {
                 var sent = await _singleInstance.SendCommandAsync(startupCommand, TimeSpan.FromSeconds(3));
                 Debug.WriteLine($"InputAtlas 单实例命令已发送：command={startupCommand} sent={sent}");
-                Shutdown();
+                Shutdown(sent ? 0 : 1);
                 return;
             }
 
@@ -63,7 +63,7 @@ public partial class App : Application, IAsyncDisposable
             _log = new AsyncRollingLog(logRoot);
             _log.Information(
                 "application_start",
-                $"version={GetVersion()} architecture={RuntimeInformation.ProcessArchitecture} runtime={Environment.Version} per_monitor_v2={Program.PerMonitorV2Enabled} windows_startup={startedByWindows}");
+                $"version={GetVersion()} architecture={RuntimeInformation.ProcessArchitecture} runtime={Environment.Version} per_monitor_v2={Program.PerMonitorV2Enabled} windows_startup={startedByWindows} administrator=true");
             StartSingleInstanceCommandServer();
 
             _settingsStore = new AppSettingsStore(Path.Combine(dataRoot, "config.json"));

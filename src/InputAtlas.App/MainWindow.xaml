@@ -777,7 +777,7 @@
                                                     Width="112"
                                                     Margin="8,4,0,4" />
                                         </StackPanel>
-                                        <CheckBox Content="登录 Windows 后自动启动"
+                                        <CheckBox Content="登录 Windows 后自动启动（需确认管理员权限）"
                                                   IsChecked="{Binding Settings.StartWithWindows}"
                                                   Click="AutostartClick"
                                                   Margin="0,16,0,0" />

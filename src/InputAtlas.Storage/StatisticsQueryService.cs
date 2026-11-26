@@ -18,6 +18,14 @@ public sealed class StatisticsQueryService(IBucketRepository repository) : IStat
             query.StartUtc,
             query.EndUtc,
             cancellationToken).ConfigureAwait(false);
+        return AggregateBuckets(query, snapshots);
+    }
+
+    // 同一范围的多个图表可复用一次查询得到的桶。
+    public static IReadOnlyList<StatisticsPoint> AggregateBuckets(StatisticsQuery query, IReadOnlyList<BucketSnapshot> snapshots)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        ArgumentNullException.ThrowIfNull(snapshots);
         var seconds = GranularitySeconds(query.Granularity);
         var groups = new SortedDictionary<long, Aggregate>();
 

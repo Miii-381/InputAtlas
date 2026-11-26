@@ -4,6 +4,24 @@ namespace InputAtlas.Core.Tests;
 
 public sealed class InputCounterEngineTests
 {
+    [Fact]
+    public void RestoredCurrentBucketKeepsOldAndNewCountsAcrossRollover()
+    {
+        const long start = 1_800_000_000;
+        var engine = new InputCounterEngine(start);
+        var stored = BucketSnapshot.Create(start, 35, [new(InputId.WheelDown, 7)], start + 35);
+        engine.RestoreBucket(start, stored);
+        BucketSnapshot? closed = null;
+        engine.BucketCompleted += snapshot => closed = snapshot;
+        engine.HandleMouse(new RawMouseSample(RawMouseButtons.VerticalWheel, -360), start + 299);
+        engine.HandleMouse(new RawMouseSample(RawMouseButtons.VerticalWheel, -120), start + 300);
+
+        Assert.NotNull(closed);
+        Assert.Equal(10, closed.Counts[InputId.WheelDown]);
+        Assert.Equal(35, closed.CoverageSeconds);
+        Assert.Equal(1, engine.Snapshot(start + 300).Counts[InputId.WheelDown]);
+    }
+
     private const long Now = 1_800_000_000;
 
     [Fact]

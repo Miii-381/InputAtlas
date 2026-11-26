@@ -103,6 +103,8 @@ public partial class App : Application, IAsyncDisposable
             }
 
             _capture = new RawInputCaptureController(_log);
+            _coordinator = new CapturePersistenceCoordinator(_capture, _repository, _log);
+            await Task.Run(() => _coordinator.ReloadCurrentBucketAsync());
             await _capture.StartAsync();
             StartupRegistration.SetEnabled(_settings.StartWithWindows, Environment.ProcessPath!);
             var autostartRegistered = StartupRegistration.IsEnabled();
@@ -116,7 +118,6 @@ public partial class App : Application, IAsyncDisposable
                     DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(System.Globalization.CultureInfo.InvariantCulture));
             }
 
-            _coordinator = new CapturePersistenceCoordinator(_capture, _repository, _log);
             _coordinator.Start();
 
             var viewModel = new MainViewModel(
@@ -232,14 +233,14 @@ public partial class App : Application, IAsyncDisposable
                 _viewModel = null;
             }
 
-            if (_coordinator is not null)
-            {
-                await _coordinator.StopAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(1));
-            }
-
             if (_capture is not null)
             {
                 await _capture.DisposeAsync();
+            }
+
+            if (_coordinator is not null)
+            {
+                await _coordinator.DisposeAsync();
             }
 
             if (_repository is not null)

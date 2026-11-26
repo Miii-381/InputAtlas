@@ -27,6 +27,36 @@ public sealed class InputCounterEngine
 
     public long BucketStartUtc => Volatile.Read(ref _bucketStartUtc);
 
+    // 在采集启动或恢复前载入当前桶；持久化保存的是完整快照。
+    public void RestoreBucket(long bucketStartUtc, BucketSnapshot? stored)
+    {
+        if (bucketStartUtc != TimeBuckets.AlignFiveMinutes(bucketStartUtc) ||
+            (stored is not null && stored.BucketStartUtc != bucketStartUtc))
+        {
+            throw new ArgumentException("要恢复的快照与当前 5 分钟桶不匹配。", nameof(bucketStartUtc));
+        }
+
+        Array.Clear(_counts);
+        _verticalPositiveRemainder = 0;
+        _verticalNegativeRemainder = 0;
+        _horizontalPositiveRemainder = 0;
+        _horizontalNegativeRemainder = 0;
+        _coverageSeconds = Math.Clamp(stored?.CoverageSeconds ?? 0, 0, 300);
+        _bucketStartUtc = bucketStartUtc;
+        if (stored is null)
+        {
+            return;
+        }
+
+        foreach (var (input, count) in stored.Counts)
+        {
+            if (input.Value < _counts.Length)
+            {
+                _counts[input.Value] = count;
+            }
+        }
+    }
+
     public void HandleKeyboard(in RawKeyboardSample sample, long unixSeconds)
     {
         EnsureBucket(unixSeconds);

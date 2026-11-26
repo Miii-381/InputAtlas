@@ -2,6 +2,8 @@
 
 InputAtlas 是完全离线的 Windows 键盘与鼠标聚合统计工具。它只保存 5 分钟/1 小时桶内的次数和覆盖秒数，不保存字符、输入顺序、逐事件时间、组合键、窗口、进程、设备身份、鼠标坐标或轨迹。
 
+从 v1.1.3 起，应用先在内存中累计输入，默认每 10 秒在后台将统计快照写入 SQLite。实时数字和热力图从内存更新，分析页的趋势在后台查询。手动保存、导出、备份和正常退出会等待当前统计落盘。
+
 ## 环境
 
 - Windows 11 x64，或仍受支持的 Windows 10 LTSC/Enterprise x64
@@ -21,8 +23,8 @@ pwsh ./build.ps1 check
 pwsh ./build.ps1 test
 pwsh ./build.ps1 benchmark
 pwsh ./build.ps1 ci
-pwsh ./build.ps1 package -Version 1.1.2
-pwsh ./build.ps1 release -Version 1.1.2
+pwsh ./build.ps1 package -Version 1.1.3
+pwsh ./build.ps1 release -Version 1.1.3
 ```
 
 编译、测试、性能基准和发布均保留用户当前的电源设置。性能基准已显式禁用 BenchmarkDotNet 的自动电源计划切换。

@@ -94,15 +94,38 @@ public sealed class RawInputCaptureController : IInputCaptureController
         await _started!.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public ValueTask PauseAsync(CancellationToken cancellationToken = default)
+    // 等输入线程确认暂停，调用方随后可以安全地保存、删除或恢复当前桶。
+    public async ValueTask PauseAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (_threadId != 0)
+        var paused = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        void OnStatusChanged(object? sender, CaptureStatus status)
         {
-            PostThreadMessage(_threadId, WmAppPause, 0, 0);
+            if (status is CaptureStatus.Paused or CaptureStatus.Stopped)
+            {
+                paused.TrySetResult();
+            }
         }
 
-        return ValueTask.CompletedTask;
+        StatusChanged += OnStatusChanged;
+        try
+        {
+            if (_threadId == 0 || Status == CaptureStatus.Paused)
+            {
+                return;
+            }
+
+            if (!PostThreadMessage(_threadId, WmAppPause, 0, 0))
+            {
+                throw new Win32Exception(Marshal.GetLastWin32Error(), "无法请求暂停采集。");
+            }
+
+            await paused.Task.WaitAsync(TimeSpan.FromSeconds(3), cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            StatusChanged -= OnStatusChanged;
+        }
     }
 
     public ValueTask ResumeAsync(CancellationToken cancellationToken = default)
@@ -173,15 +196,33 @@ public sealed class RawInputCaptureController : IInputCaptureController
         }
     }
 
-    public BucketSnapshot GetCurrentSnapshot() =>
-        _engine.Snapshot(TimeProvider.GetUtcNow().ToUnixTimeSeconds());
+    public long CurrentUnixSeconds => TimeProvider.GetUtcNow().ToUnixTimeSeconds();
+
+    // 采集、覆盖计时与快照共享桶边界，避免切桶时读到半份数据。
+    public BucketSnapshot GetCurrentSnapshot()
+    {
+        lock (_engine)
+        {
+            return _engine.Snapshot(CurrentUnixSeconds);
+        }
+    }
+
+    public void RestoreBucket(long bucketStartUtc, BucketSnapshot? stored)
+    {
+        lock (_engine)
+        {
+            _engine.RestoreBucket(bucketStartUtc, stored);
+        }
+    }
 
     public void AddCoverageSecond()
     {
         if (IsCoverageActive)
         {
-            var now = TimeProvider.GetUtcNow().ToUnixTimeSeconds();
-            _engine.AddCoverage(1, now);
+            lock (_engine)
+            {
+                _engine.AddCoverage(1, CurrentUnixSeconds);
+            }
         }
     }
 
@@ -524,7 +565,6 @@ public sealed class RawInputCaptureController : IInputCaptureController
         }
 
         var header = (RawInputHeader*)buffer;
-        var now = TimeProvider.GetUtcNow().ToUnixTimeSeconds();
         if (header->Type == RimhKeyboard)
         {
             if (!_keyboardInputObserved)
@@ -543,7 +583,10 @@ public sealed class RawInputCaptureController : IInputCaptureController
                 (flags & 0x02) != 0,
                 (flags & 0x04) != 0,
                 (flags & 0x01) != 0);
-            _engine.HandleKeyboard(sample, now);
+            lock (_engine)
+            {
+                _engine.HandleKeyboard(sample, CurrentUnixSeconds);
+            }
         }
         else if (header->Type == RimhMouse)
         {
@@ -561,9 +604,11 @@ public sealed class RawInputCaptureController : IInputCaptureController
                 return;
             }
 
-            _engine.HandleMouse(
-                new RawMouseSample((RawMouseButtons)mouse->ButtonFlags, unchecked((short)mouse->ButtonData)),
-                now);
+            var sample = new RawMouseSample((RawMouseButtons)mouse->ButtonFlags, unchecked((short)mouse->ButtonData));
+            lock (_engine)
+            {
+                _engine.HandleMouse(sample, CurrentUnixSeconds);
+            }
         }
     }
 

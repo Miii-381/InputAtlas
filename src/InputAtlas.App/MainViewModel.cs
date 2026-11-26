@@ -28,8 +28,14 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
     private readonly ConcurrentQueue<(InputId Input, bool IsPressed)> _pendingVisualTransitions = new();
     private readonly IReadOnlyList<FontFamilyOption> _fontFamilyOptions = FontFamilyService.Options;
     private AppSettings _settings;
-    private CancellationTokenSource? _refreshCancellation;
+    private readonly CancellationTokenSource _refreshCancellation = new();
+    // 高频输入的数字和热图最多每 125 毫秒从内存刷新一次。
+    private readonly DispatcherTimer _metricsTimer = new(DispatcherPriority.Background)
+    {
+        Interval = TimeSpan.FromMilliseconds(125),
+    };
     private int _pageIndex;
+    private bool _disposed;
     private string _currentDate = string.Empty;
     private string _currentTime = string.Empty;
     private string _timeZoneLabel = string.Empty;
@@ -86,6 +92,9 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
         new ReadOnlyDictionary<InputId, long>(new Dictionary<InputId, long>());
     private long _liveDayStartUtc;
     private long _liveDayEndUtc;
+    private long _liveBucketStartUtc;
+    // 当天以前的活跃天数只在跨日或用户主动刷新历史数据时重算。
+    private int? _previousActiveDays;
     private int _liveFrameScheduled;
     private int _liveCountDirty;
     private long _liveEventsSinceLog;
@@ -128,6 +137,9 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
         _capture.InputCounted += CaptureInputCounted;
         _capture.InputStateChanged += CaptureInputStateChanged;
         _coordinator.SnapshotChanged += CoordinatorSnapshotChanged;
+        _capture.BucketCompleted += CaptureBucketCompleted;
+        _metricsTimer.Tick += MetricsTimerTick;
+        _metricsTimer.Start();
     }
 
     public event Action<InputId, bool>? InputVisualStateChanged;
@@ -154,6 +166,10 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
             {
                 RaisePropertyChanged(nameof(PageTitle));
                 RaisePropertyChanged(nameof(PageSubtitle));
+                if (value == 1 && !_analysisUsesHistoryScope)
+                {
+                    _ = RefreshAsync(skipIfBusy: true);
+                }
             }
         }
     }
@@ -514,42 +530,46 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
 
     public async Task InitializeAsync() => await RefreshAsync().ConfigureAwait(true);
 
-    public async Task RefreshAsync()
+    public async Task RefreshAsync(bool skipIfBusy = false)
     {
-        if (!await _refreshGate.WaitAsync(0).ConfigureAwait(true))
+        if (_disposed || !await _refreshGate.WaitAsync(skipIfBusy ? 0 : Timeout.Infinite).ConfigureAwait(true))
         {
             return;
         }
 
-        _refreshCancellation?.Cancel();
-        _refreshCancellation?.Dispose();
-        _refreshCancellation = new CancellationTokenSource();
-        var cancellationToken = _refreshCancellation.Token;
         try
         {
+            var cancellationToken = _refreshCancellation.Token;
+            cancellationToken.ThrowIfCancellationRequested();
             var started = Stopwatch.GetTimestamp();
             var (zone, fallback) = GetEffectiveTimeZone();
             var now = DateTimeOffset.UtcNow;
             var localNow = TimeZoneInfo.ConvertTime(now, zone);
-            var localStart = DateTime.SpecifyKind(localNow.Date, DateTimeKind.Unspecified);
-            var startUtc = new DateTimeOffset(TimeZoneInfo.ConvertTimeToUtc(localStart, zone)).ToUnixTimeSeconds();
-            var endUtc = new DateTimeOffset(TimeZoneInfo.ConvertTimeToUtc(localStart.AddDays(1), zone)).ToUnixTimeSeconds();
-            var snapshots = (await _repository.ReadRangeAsync(startUtc, endUtc, cancellationToken).ConfigureAwait(true))
-                .ToDictionary(static bucket => bucket.BucketStartUtc);
-            var active = _capture.GetCurrentSnapshot();
-            _liveDayStartUtc = startUtc;
-            _liveDayEndUtc = endUtc;
-            _todayHistoricalCounts = new ReadOnlyDictionary<InputId, long>(
-                AggregateCounts(snapshots
-                    .Where(pair => pair.Key != active.BucketStartUtc)
-                    .Select(static pair => pair.Value)));
-            if (active.BucketStartUtc >= startUtc && active.BucketStartUtc < endUtc)
+            var (startUtc, endUtc) = GetUtcDayRange(localNow.Date, zone);
+            var cachedDays = skipIfBusy && _liveDayStartUtc == startUtc ? _previousActiveDays : null;
+            var history = await Task.Run(async () =>
             {
-                snapshots[active.BucketStartUtc] = active;
+                var bucketStart = _capture.GetCurrentSnapshot().BucketStartUtc;
+                var buckets = await _coordinator.ReadRangeAsync(startUtc, endUtc, cancellationToken).ConfigureAwait(false);
+                var baseline = AggregateCounts(buckets.Where(item => item.BucketStartUtc != bucketStart));
+                var firstText = await _repository.GetMetadataAsync("first_capture_utc", cancellationToken).ConfigureAwait(false);
+                var firstUtc = long.TryParse(firstText, CultureInfo.InvariantCulture, out var first) ? first : startUtc;
+                var previousDays = cachedDays ?? (firstUtc < startUtc
+                    ? await CountActiveDaysAsync(firstUtc, startUtc, zone, cancellationToken).ConfigureAwait(false)
+                    : 0);
+                var activeDays = previousDays + (MetricsCalculator.Calculate(buckets).IsActiveDay ? 1 : 0);
+                return (bucketStart, baseline, firstUtc, previousDays, activeDays, buckets.Count);
+            }, cancellationToken).ConfigureAwait(true);
+            if (_capture.GetCurrentSnapshot().BucketStartUtc == history.bucketStart)
+            {
+                _liveDayStartUtc = startUtc;
+                _liveDayEndUtc = endUtc;
+                _liveBucketStartUtc = history.bucketStart;
+                _todayHistoricalCounts = history.baseline;
+                _previousActiveDays = history.previousDays;
+                UpdateLivePresentation();
             }
 
-            var metrics = MetricsCalculator.Calculate(snapshots.Values);
-            var counts = AggregateCounts(snapshots.Values);
             CurrentDate = localNow.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
             CurrentTime = localNow.ToString("HH:mm", CultureInfo.InvariantCulture);
             var offset = zone.GetUtcOffset(now.UtcDateTime);
@@ -560,25 +580,18 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
             LastSavedText = _coordinator.LastSavedUtc is { } saved
                 ? $"最近保存 {TimeZoneInfo.ConvertTime(saved, zone):HH:mm:ss}"
                 : "尚未完成首次检查点";
-            ApplyLiveMetrics(metrics, counts);
-
-            var firstText = await _repository.GetMetadataAsync("first_capture_utc", cancellationToken).ConfigureAwait(true);
-            if (long.TryParse(firstText, NumberStyles.None, CultureInfo.InvariantCulture, out var firstUtc))
+            var firstDate = TimeZoneInfo.ConvertTime(DateTimeOffset.FromUnixTimeSeconds(history.firstUtc), zone).Date;
+            UsedDays = ((localNow.Date - firstDate).Days + 1).ToString(CultureInfo.CurrentCulture);
+            ActiveDays = history.activeDays.ToString(CultureInfo.CurrentCulture);
+            if (PageIndex == 1 && !_analysisUsesHistoryScope)
             {
-                var firstDate = TimeZoneInfo.ConvertTime(DateTimeOffset.FromUnixTimeSeconds(firstUtc), zone).Date;
-                UsedDays = ((localNow.Date - firstDate).Days + 1).ToString(CultureInfo.CurrentCulture);
-                ActiveDays = (await CountActiveDaysAsync(firstUtc, endUtc, zone, cancellationToken).ConfigureAwait(true))
-                    .ToString(CultureInfo.CurrentCulture);
-            }
-
-            UpdateSelectedDetail();
-            if (!_analysisUsesHistoryScope)
-            {
+                UpdateStatisticsDimensions(_analysisCounts);
                 await RefreshTrendAsync(now, cancellationToken).ConfigureAwait(true);
             }
+
             _log.Information(
                 "dashboard_refreshed",
-                $"duration_ms={Stopwatch.GetElapsedTime(started).TotalMilliseconds:F1} buckets={snapshots.Count}");
+                $"duration_ms={Stopwatch.GetElapsedTime(started).TotalMilliseconds:F1} buckets={history.Count}");
         }
         catch (OperationCanceledException)
         {
@@ -620,8 +633,16 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
         }
         else
         {
-            await SaveNowAsync(false);
-            await _capture.PauseAsync();
+            try
+            {
+                await _capture.PauseAsync();
+                await SaveNowAsync(false);
+            }
+            catch (Exception exception)
+            {
+                _log.LogError("capture_pause_save_failed", "暂停或保存统计失败", exception);
+                NotifyOperationCompleted("暂停或保存失败", exception.Message);
+            }
         }
 
         ApplyCaptureStatus(_capture.Status);
@@ -630,8 +651,17 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
 
     public async Task SaveNowAsync(bool notify = true)
     {
-        await _coordinator.SaveNowAsync();
-        LastSavedText = "正在保存…";
+        try
+        {
+            await _coordinator.SaveNowAsync();
+        }
+        catch (Exception exception) when (notify)
+        {
+            _log.LogError("manual_save_failed", "手动保存失败，统计保留在内存中", exception);
+            NotifyOperationCompleted("保存失败", exception.Message);
+            return;
+        }
+        LastSavedText = $"最近保存 {_coordinator.LastSavedUtc?.ToLocalTime():HH:mm:ss}";
         _log.Information("statistics_save_completed", $"notify={notify}");
         if (notify)
         {
@@ -843,6 +873,35 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
 
     public async Task QueryHistoryAsync()
     {
+        if (_disposed)
+        {
+            return;
+        }
+
+        await _refreshGate.WaitAsync().ConfigureAwait(true);
+        try
+        {
+            if (!_refreshCancellation.IsCancellationRequested)
+            {
+                await QuerySelectedRangeAsync().ConfigureAwait(true);
+            }
+        }
+        catch (OperationCanceledException) when (_refreshCancellation.IsCancellationRequested)
+        {
+        }
+        catch (Exception exception)
+        {
+            _log.LogError("history_query_failed", "日期范围查询失败", exception);
+            HistorySummary = "查询失败，请重试。";
+        }
+        finally
+        {
+            _refreshGate.Release();
+        }
+    }
+
+    private async Task QuerySelectedRangeAsync()
+    {
         if (HistoryStart is null || HistoryEnd is null || HistoryEnd < HistoryStart || HistoryEnd > DateTime.Today)
         {
             HistorySummary = "日期范围无效，且不能包含未来日期。";
@@ -855,10 +914,12 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
         var end = DateTime.SpecifyKind(HistoryEnd.Value.Date.AddDays(1), DateTimeKind.Unspecified);
         var startUtc = new DateTimeOffset(TimeZoneInfo.ConvertTimeToUtc(start, zone)).ToUnixTimeSeconds();
         var endUtc = new DateTimeOffset(TimeZoneInfo.ConvertTimeToUtc(end, zone)).ToUnixTimeSeconds();
-        var snapshots = await _repository.ReadRangeAsync(startUtc, endUtc);
-        var metrics = MetricsCalculator.Calculate(snapshots);
-        var counts = AggregateCounts(snapshots);
-        var coverage = snapshots.Sum(static item => item.CoverageSeconds);
+        var token = _refreshCancellation.Token;
+        var (snapshots, metrics, counts, coverage) = await Task.Run(async () =>
+        {
+            var rows = await _coordinator.ReadRangeAsync(startUtc, endUtc, token).ConfigureAwait(false);
+            return (rows, MetricsCalculator.Calculate(rows), AggregateCounts(rows), rows.Sum(static item => (long)item.CoverageSeconds));
+        }, token).ConfigureAwait(true);
         var expected = Math.Max(1, endUtc - startUtc);
         HistorySummary = $"键盘 {metrics.KeyboardCount:N0} · 鼠标 {metrics.MouseButtonCount:N0} · 滚轮 {metrics.WheelSteps:N0} · 覆盖率 {coverage * 100d / expected:F1}%";
         HistoryKeyboardCount = metrics.KeyboardCount.ToString("N0", CultureInfo.CurrentCulture);
@@ -866,13 +927,13 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
         HistoryWheelCount = metrics.WheelSteps.ToString("N0", CultureInfo.CurrentCulture);
         HistoryActivityScore = metrics.ActivityScore.ToString("N1", CultureInfo.CurrentCulture);
         HistoryCoverage = $"覆盖率 {coverage * 100d / expected:F1}%";
-        AnalysisScopeLabel = $"{HistoryStart.Value:yyyy-MM-dd} 至 {HistoryEnd.Value:yyyy-MM-dd}";
+        AnalysisScopeLabel = $"{start:yyyy-MM-dd} 至 {end.AddDays(-1):yyyy-MM-dd}";
         _analysisUsesHistoryScope = true;
         _analysisRangeStartUtc = startUtc;
         _analysisRangeEndUtc = endUtc;
         _analysisCounts = new ReadOnlyDictionary<InputId, long>(new Dictionary<InputId, long>(counts));
         UpdateStatisticsDimensions(_analysisCounts);
-        await RefreshTrendAsync(DateTimeOffset.UtcNow, CancellationToken.None).ConfigureAwait(true);
+        await RefreshTrendAsync(DateTimeOffset.UtcNow, token, snapshots).ConfigureAwait(true);
         _log.Information(
             "history_dashboard_refreshed",
             $"start_utc={startUtc} end_utc={endUtc} buckets={snapshots.Count} keyboard={metrics.KeyboardCount} mouse={metrics.MouseButtonCount} wheel={metrics.WheelSteps}");
@@ -974,7 +1035,8 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
                 Path.Combine(safetyDirectory, $"before-restore-{DateTime.Now:yyyyMMdd-HHmmss}.zip"),
                 _settingsPath,
                 typeof(MainViewModel).Assembly.GetName().Version?.ToString() ?? "0.0.0");
-            await _dataManagement.RestoreBackupPackageAsync(dialog.FileName, _settingsPath);
+            await _coordinator.ChangeStoredDataAsync(() =>
+                _dataManagement.RestoreBackupPackageAsync(dialog.FileName, _settingsPath).AsTask());
             await RefreshAsync();
             if (_analysisUsesHistoryScope)
             {
@@ -1013,8 +1075,10 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
             return;
         }
 
+        var wasRecording = _capture.Status == CaptureStatus.Recording;
         try
         {
+            await _capture.PauseAsync();
             var backupDirectory = Path.Combine(DataDirectory, "Backups");
             Directory.CreateDirectory(backupDirectory);
             await SaveNowAsync(false);
@@ -1025,8 +1089,12 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
             var (zone, _) = GetEffectiveTimeZone();
             var start = GetUtcDayRange(HistoryStart.Value.Date, zone).StartUtc;
             var end = GetUtcDayRange(HistoryEnd.Value.Date, zone).EndUtc;
-            var affected = await _repository.DeleteRangeAsync(start, end);
-            _log.Information("statistics_deleted", $"rows={affected}");
+            var affected = 0;
+            await _coordinator.ChangeStoredDataAsync(async () =>
+            {
+                affected = await _repository.DeleteRangeAsync(start, end).ConfigureAwait(false);
+                _log.Information("statistics_deleted", $"rows={affected}");
+            });
             await QueryHistoryAsync();
             await RefreshAsync();
             NotifyOperationCompleted("删除完成", $"已删除 {affected:N0} 个统计桶，安全备份已创建。");
@@ -1036,18 +1104,29 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
             _log.LogError("statistics_delete_failed", "范围删除失败", exception);
             MessageBox.Show($"删除失败：{exception.Message}", "InputAtlas", MessageBoxButton.OK, MessageBoxImage.Error);
         }
+        finally
+        {
+            if (wasRecording)
+            {
+                await _capture.ResumeAsync();
+            }
+        }
     }
 
     public async ValueTask DisposeAsync()
     {
+        _disposed = true;
         _capture.StatusChanged -= CaptureStatusChanged;
         _capture.InputCounted -= CaptureInputCounted;
         _capture.InputStateChanged -= CaptureInputStateChanged;
         _coordinator.SnapshotChanged -= CoordinatorSnapshotChanged;
-        _refreshCancellation?.Cancel();
-        _refreshCancellation?.Dispose();
+        _capture.BucketCompleted -= CaptureBucketCompleted;
+        _metricsTimer.Stop();
+        _metricsTimer.Tick -= MetricsTimerTick;
+        await _refreshCancellation.CancelAsync();
+        await _refreshGate.WaitAsync();
         _refreshGate.Dispose();
-        await Task.CompletedTask;
+        _refreshCancellation.Dispose();
     }
 
     private async Task SavePetSettingsAsync(AppSettings settings, string field, string value)
@@ -1069,7 +1148,8 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
         OperationCompleted?.Invoke(title, message);
     }
 
-    private async Task RefreshTrendAsync(DateTimeOffset now, CancellationToken cancellationToken)
+    private async Task RefreshTrendAsync(DateTimeOffset now, CancellationToken cancellationToken,
+        IReadOnlyList<BucketSnapshot>? knownBuckets = null)
     {
         var selectedStart = _analysisRangeStartUtc;
         var selectedEnd = _analysisRangeEndUtc;
@@ -1080,21 +1160,15 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
         var start = hasHistoryScope ? selectedStart!.Value : now.AddDays(-7).ToUnixTimeSeconds();
         var end = hasHistoryScope ? selectedEnd!.Value : now.ToUnixTimeSeconds() + 1;
         var granularity = TimeBuckets.ChooseGranularity(TimeSpan.FromSeconds(end - start));
-        var queryService = new StatisticsQueryService(_repository);
-        var keyboardTask = queryService.QueryAsync(
-            new StatisticsQuery(start, end, granularity, InputCategory.Keyboard),
-            cancellationToken).AsTask();
-        var mouseTask = queryService.QueryAsync(
-            new StatisticsQuery(start, end, granularity, InputCategory.MouseButton),
-            cancellationToken).AsTask();
-        var wheelTask = queryService.QueryAsync(
-            new StatisticsQuery(start, end, granularity, InputCategory.Wheel),
-            cancellationToken).AsTask();
-        await Task.WhenAll(keyboardTask, mouseTask, wheelTask).ConfigureAwait(true);
-        var keyboard = await keyboardTask.ConfigureAwait(true);
-        var mouse = await mouseTask.ConfigureAwait(true);
-        var wheel = await wheelTask.ConfigureAwait(true);
-        var activity = BuildActivityPoints(keyboard, mouse, wheel);
+        var (keyboard, activity) = await Task.Run(async () =>
+        {
+            var buckets = knownBuckets ?? await _coordinator.ReadRangeAsync(start, end, cancellationToken).ConfigureAwait(false);
+            var query = new StatisticsQuery(start, end, granularity, InputCategory.Keyboard);
+            var keys = StatisticsQueryService.AggregateBuckets(query, buckets);
+            var mouse = StatisticsQueryService.AggregateBuckets(query with { Category = InputCategory.MouseButton }, buckets);
+            var wheel = StatisticsQueryService.AggregateBuckets(query with { Category = InputCategory.Wheel }, buckets);
+            return (keys, BuildActivityPoints(keys, mouse, wheel));
+        }, cancellationToken).ConfigureAwait(true);
         var (displayTimeZone, fallback) = GetEffectiveTimeZone();
         ChartAdapter.UpdateCountsChart(TrendPlot, keyboard, displayTimeZone);
         ChartAdapter.UpdateActivityChart(ActivityPlot, activity, displayTimeZone);
@@ -1187,7 +1261,7 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
         TimeZoneInfo zone,
         CancellationToken cancellationToken)
     {
-        var snapshots = await _repository.ReadRangeAsync(firstUtc, endUtc, cancellationToken).ConfigureAwait(true);
+        var snapshots = await _coordinator.ReadRangeAsync(firstUtc, endUtc, cancellationToken).ConfigureAwait(false);
         var byDay = snapshots.GroupBy(bucket =>
             TimeZoneInfo.ConvertTime(DateTimeOffset.FromUnixTimeSeconds(bucket.BucketStartUtc), zone).Date);
         return byDay.Count(group => MetricsCalculator.Calculate(group).IsActiveDay);
@@ -1215,7 +1289,7 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
     {
         if (Application.Current?.Dispatcher is { } dispatcher)
         {
-            _ = dispatcher.InvokeAsync(RefreshAsync);
+            _ = dispatcher.InvokeAsync(() => RefreshAsync(skipIfBusy: true), DispatcherPriority.Background);
         }
     }
 
@@ -1242,7 +1316,34 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
     {
         Interlocked.Exchange(ref _liveCountDirty, 1);
         Interlocked.Increment(ref _liveEventsSinceLog);
-        ScheduleLiveFrame();
+    }
+
+    private void MetricsTimerTick(object? sender, EventArgs e)
+    {
+        if (Interlocked.Exchange(ref _liveCountDirty, 0) != 0)
+        {
+            UpdateLivePresentation();
+        }
+    }
+
+    // 封桶后把最终计数并入内存基线，页面无需等待落盘。
+    private void CaptureBucketCompleted(BucketSnapshot closed)
+    {
+        _ = Application.Current?.Dispatcher.InvokeAsync(() =>
+        {
+            if (_liveBucketStartUtc > closed.BucketStartUtc || closed.BucketStartUtc < _liveDayStartUtc ||
+                closed.BucketStartUtc >= _liveDayEndUtc)
+            {
+                return;
+            }
+
+            var counts = new SortedDictionary<InputId, long>();
+            AddCounts(counts, _todayHistoricalCounts);
+            AddCounts(counts, closed.Counts);
+            _todayHistoricalCounts = counts;
+            _liveBucketStartUtc = closed.BucketStartUtc + 300;
+            Interlocked.Exchange(ref _liveCountDirty, 1);
+        });
     }
 
     private void CaptureInputStateChanged(InputId input, bool isPressed)
@@ -1277,13 +1378,8 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
             InputVisualStateChanged?.Invoke(transition.Input, transition.IsPressed);
         }
 
-        if (Interlocked.Exchange(ref _liveCountDirty, 0) != 0)
-        {
-            UpdateLivePresentation();
-        }
-
         Interlocked.Exchange(ref _liveFrameScheduled, 0);
-        if (!_pendingVisualTransitions.IsEmpty || Volatile.Read(ref _liveCountDirty) != 0)
+        if (!_pendingVisualTransitions.IsEmpty)
         {
             ScheduleLiveFrame();
         }
@@ -1294,24 +1390,15 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
     private void UpdateLivePresentation()
     {
         var active = _capture.GetCurrentSnapshot();
-        if (active.BucketStartUtc < _liveDayStartUtc || active.BucketStartUtc >= _liveDayEndUtc)
+        if (active.BucketStartUtc != _liveBucketStartUtc || active.BucketStartUtc < _liveDayStartUtc ||
+            active.BucketStartUtc >= _liveDayEndUtc)
         {
             return;
         }
 
         var counts = new SortedDictionary<InputId, long>();
-        foreach (var pair in _todayHistoricalCounts)
-        {
-            counts[pair.Key] = pair.Value;
-        }
-
-        foreach (var pair in active.Counts)
-        {
-            counts.TryGetValue(pair.Key, out var historical);
-            counts[pair.Key] = historical > long.MaxValue - pair.Value
-                ? long.MaxValue
-                : historical + pair.Value;
-        }
+        AddCounts(counts, _todayHistoricalCounts);
+        AddCounts(counts, active.Counts);
 
         var metrics = MetricsCalculator.Calculate(
             [new BucketSnapshot(active.BucketStartUtc, active.CoverageSeconds, counts, active.UpdatedUtc)]);
@@ -1330,7 +1417,7 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
         InputCounts = new ReadOnlyDictionary<InputId, long>(counts);
         if (!_analysisUsesHistoryScope)
         {
-            _analysisCounts = new ReadOnlyDictionary<InputId, long>(new Dictionary<InputId, long>(counts));
+            _analysisCounts = InputCounts;
             AnalysisScopeLabel = "今天（实时）";
             HistoryKeyboardCount = metrics.KeyboardCount.ToString("N0", CultureInfo.CurrentCulture);
             HistoryMouseCount = metrics.MouseButtonCount.ToString("N0", CultureInfo.CurrentCulture);
@@ -1338,7 +1425,6 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
             HistoryActivityScore = metrics.ActivityScore.ToString("N1", CultureInfo.CurrentCulture);
             HistoryCoverage = "实时覆盖";
             HistorySummary = $"键盘 {metrics.KeyboardCount:N0} · 鼠标 {metrics.MouseButtonCount:N0} · 滚轮 {metrics.WheelSteps:N0} · 实时更新";
-            UpdateStatisticsDimensions(_analysisCounts);
         }
     }
 
@@ -1456,14 +1542,19 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
         var result = new SortedDictionary<InputId, long>();
         foreach (var snapshot in snapshots)
         {
-            foreach (var pair in snapshot.Counts)
-            {
-                result.TryGetValue(pair.Key, out var current);
-                result[pair.Key] = current > long.MaxValue - pair.Value ? long.MaxValue : current + pair.Value;
-            }
+            AddCounts(result, snapshot.Counts);
         }
 
         return result;
+    }
+
+    private static void AddCounts(SortedDictionary<InputId, long> result, IReadOnlyDictionary<InputId, long> counts)
+    {
+        foreach (var (input, count) in counts)
+        {
+            result.TryGetValue(input, out var current);
+            result[input] = current > long.MaxValue - count ? long.MaxValue : current + count;
+        }
     }
 
     private static (TimeZoneInfo Zone, bool Fallback) GetEffectiveTimeZone()

@@ -158,7 +158,7 @@
                         Style="{StaticResource PageTabControl}"
                         SelectedIndex="{Binding PageIndex}">
                 <TabItem>
-                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <local:PageScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                         <StackPanel Margin="22,0,22,26">
                             <ContentControl Content="{Binding}" ContentTemplate="{StaticResource PageHeaderTemplate}" HorizontalContentAlignment="Stretch" />
                             <UniformGrid Columns="6" Margin="-6,0,-6,14">
@@ -377,12 +377,12 @@
                                 </StackPanel>
                             </Grid>
                         </StackPanel>
-                    </ScrollViewer>
+                    </local:PageScrollViewer>
                 </TabItem>
 
                 <TabItem>
                     <!-- 统一分析仪表盘：日期筛选、范围摘要、趋势与统计维度在同一滚动页面内。 -->
-                    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                    <local:PageScrollViewer VerticalScrollBarVisibility="Auto"
                                   HorizontalScrollBarVisibility="Disabled">
                         <StackPanel>
                             <ContentControl Margin="22,0,22,0" Content="{Binding}" ContentTemplate="{StaticResource PageHeaderTemplate}" HorizontalContentAlignment="Stretch" />
@@ -719,11 +719,11 @@
                             </Border>
                         </Grid>
                         </StackPanel>
-                    </ScrollViewer>
+                    </local:PageScrollViewer>
                 </TabItem>
 
                 <TabItem>
-                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <local:PageScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel>
                             <ContentControl Margin="22,0,22,0" Content="{Binding}" ContentTemplate="{StaticResource PageHeaderTemplate}" HorizontalContentAlignment="Stretch" />
                         <Grid Margin="22,4,22,100" HorizontalAlignment="Stretch">
@@ -984,7 +984,7 @@
                             </StackPanel>
                         </Grid>
                         </StackPanel>
-                    </ScrollViewer>
+                    </local:PageScrollViewer>
                 </TabItem>
             </TabControl>
         </Grid>
